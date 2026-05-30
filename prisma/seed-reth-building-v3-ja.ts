@@ -38,6 +38,8 @@ export async function seedRethBuildingV3JA(prisma: PrismaClient) {
 
 ここまでの 4 ティアはソースを *読む* フェーズだった。ここからは *作る* フェーズに入る。だが「読んだ」「作った」「たぶん動く」を、どうやって「正しい」と区別するのか？ 自分で書いたコードの正しさは、誰がどうやって証明するのか？
 
+> 注: この Building コースのコードブロックは「実行可能な最小例」と「概念説明の抜粋」が混在する。各レッスンの指示（抜粋/実行）に従うこと。
+
 ## 原理（最小モデル）
 
 - **テストスイートが green になるまで、レッスンは完了でない。** 判定は green か未完了の 2 択だけ。「読んだ」「作った」「たぶん動く」は完了条件にならない。本気のインフラを動かすチーム（TigerBeetle / Cloudflare / PostgreSQL）に「読んだら正しそうだった」を答えとする組織はひとつもない。
@@ -247,7 +249,7 @@ async fn process_event(&mut self, event: Event) -> Vec<Action> {
 
 ---
 
-ここまでで「searcher = collector → strategy → executor のパイプライン」は着地した。ここから artemis を読み、自分の bot に落とす。コードは完全形（excerpt は repo を開いて確認する）。
+ここまでで「searcher = collector → strategy → executor のパイプライン」は着地した。ここから artemis を読み、自分の bot に落とす。コードは抜粋（実行時は repo 全体を参照）。
 
 > 🛑 **予測。** Executor と Strategy を統合した場合に壊れる点を一文で。（答え: 提出を strategy に直書きすると、提出先（Flashbots relay 等）の障害で strategy 全体が止まる。分離していれば同じ \`Action\` を別 executor に流せ、提出経路を MEV ロジックに触れず入れ替えられる — trait の分割は理論的綺麗さでなく耐障害性のため。）
 
@@ -410,7 +412,7 @@ pub enum QueryEngine {
 
 ---
 
-ここまでで「OLTP/OLAP デュアルストレージ + dual sink」は着地した。ここから tidx を読み、自分の indexer に落とす。コードは完全形（excerpt は repo を開いて確認）。
+ここまでで「OLTP/OLAP デュアルストレージ + dual sink」は着地した。ここから tidx を読み、自分の indexer に落とす。コードは抜粋（実行時は repo 全体を参照）。
 
 > 🛑 **予測。** dual-sink で \`write_all\` はどこまで順序を保証するか。ブロック N が PG にだけあり CH にない状態は起こり得るか。（答え: 起き得るが短時間。\`try_join!\` は両成功時に return するため、途中で CH を先に読むと古い値を見うる。tidx はこれを許容し \`ch_backfill_block\` で後から埋める。整合性モデルが PG=トランザクション・CH=append-only retry で違うのが前提。）
 
@@ -641,7 +643,7 @@ fn main() {
 
 ---
 
-ここまでで「カスタム RPC = ノード内集計を既存サーバに登録」は着地した。ここから trait → impl → 統合 → test の順で組み立てる。コードは完全形。
+ここまでで「カスタム RPC = ノード内集計を既存サーバに登録」は着地した。ここから trait → impl → 統合 → test の順で組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** なぜ \`pool.pending()\` は軽く、\`txpool_content\` RPC は重いのか。（答え: \`pool.pending()\` は in-process のスナップショット iterator を読むだけ — wire 変換なし。\`txpool_content\` は全 pending tx をフルで JSON 化して wire 転送する。差は「返却データ量」と「wire 変換コスト」。）
 
@@ -1108,7 +1110,7 @@ async fn main() -> eyre::Result<()> {
 
 ---
 
-ここまでで「ローカル nonce 1 source + 送信/確認の分離 + 同一 nonce 高 fee 置換」は着地した。ここから 5 ステップで組み立てる。コードは完全形。
+ここまでで「ローカル nonce 1 source + 送信/確認の分離 + 同一 nonce 高 fee 置換」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** 「nonce 取得→署名→送信」を同一アドレスで 100ms 以内に 2 回実行すると何が壊れるか。（答え: 両方が同じ nonce N を読んで N で署名し、1 つだけ着地する。もう 1 つは「nonce too low / already known」で拒否され、ユーザの 2 件目の送信がサイレントに消える。ローカル nonce 予約はこの競合を mutex 下の \`nonce + 1\` で潰す。）
 
@@ -1485,7 +1487,7 @@ async fn main() -> eyre::Result<()> {
 
 ---
 
-ここまでで「7702 = type 4 + auth_list、sponsor は外側 tx + ガス、authorization が delegation pointer を一時的に書き換える」は着地した。ここから 4 ステップで組み立てる。コードは完全形。
+ここまでで「7702 = type 4 + auth_list、sponsor は外側 tx + ガス、authorization が delegation pointer を一時的に書き換える」は着地した。ここから 4 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** なぜ Type 4 tx の \`from\` は Alice ではなく sponsor（Bob）でなければならないか。（答え: EIP-1559 の \`from\` は「この tx に nonce を使い、gas を payer として課金される人」を意味する。Bob がガスを払うので Bob が \`from\`。Alice の役割は authorization の署名者 — 「私の EOA に delegate コードを認可する」を表明するだけ。外側 tx の nonce と authorization の nonce は別物。）
 
@@ -1813,7 +1815,7 @@ contract CounterTest {
 
 ---
 
-ここまでで「precompile = executor 拡張、セレクタ dispatch で Solidity contract に見える」は着地した。ここから 4 ステップで組み立てる。コードは完全形。
+ここまでで「precompile = executor 拡張、セレクタ dispatch で Solidity contract に見える」は着地した。ここから 4 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** なぜ precompile で実装するのか、precompile でしかできない点は？（答え: Revm 内部（fresh \`Context\`、入れ子 EVM 実行、Inspector 経由の親 state 共有）にフル Rust でアクセスできる。普通の Solidity contract は EVM op しか持たず、新 opcode はコンセンサスを fork する。precompile は mainnet 影響なしで Rust 関数を VM から呼び出せる唯一の道。）
 
@@ -2184,7 +2186,7 @@ async fn main() -> eyre::Result<()> {
 
 ---
 
-ここまでで「1 fork = atomic snapshot、V2 = constant product、V3 = Quoter 呼び」は着地した。ここから 5 ステップで組み立てる。コードは完全形。
+ここまでで「1 fork = atomic snapshot、V2 = constant product、V3 = Quoter 呼び」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** 各 pool を直接 RPC で叩かず fork で state を読む理由は？（答え: 全 read が同じ atomic snapshot から得られる + 仮想 swap のガスも fork 内で測れる + 初回 fetch 後は ~200µs/pool で N 並列 RPC より遥かに速い。atomicity は「ベストルート」を健全にする最低条件 — pool 間 state drift を抑える唯一の道。）
 
@@ -2590,7 +2592,7 @@ async fn route_handler(
 
 ---
 
-ここまでで「decision layer + 2 provider 非対称」は着地した。ここから 6 ステップで組み立てる。コードは完全形。
+ここまでで「decision layer + 2 provider 非対称」は着地した。ここから 6 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** L1 の MEV searcher は、この router の脅威モデルそのもの。searcher の行動と router が防ぐ対象を一文で。（答え: searcher は pending tx に sandwich を仕掛けて利益を得る。router はその検出器を *防御側に転用* し、敵が先に着地したらユーザの output がどれだけ落ちるかを fork で測り、Medium/High なら private（Flashbots Protect）に逃がす。同じ mempool 監視・同じ fork simulation、視点だけが反転する。）
 
@@ -2865,7 +2867,7 @@ async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::
 
 ---
 
-ここまでで「differential vs production provider」は着地した。ここから 5 ステップで組み立てる。コードは完全形。
+ここまでで「differential vs production provider」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
 > 🛑 **予測。** Revm の spec が mainnet とずれている場合、検証ハーネスにはどんな不一致として現れるか？（答え: ① 出力が一貫して \`0x\`/空（spec 違い、例: mainnet 用に作ったが op-mainnet を見ている）② ハードフォーク境界でだけ出力が違う（Revm の有効化 block が実チェーンと不一致）③ 特定 precompile を呼ぶ tx だけ違う（Revm に未実装、例: RIP-7212 secp256r1）。上位 3 原因がチェーン spec / ハードフォーク / precompile の不一致。）
 
@@ -3064,7 +3066,7 @@ tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 
 ---
 
-ここまでで「HTTP 402 + Core/Intents/Methods 3 層 + rail 中立」は着地した。仕様は IETF ドラフト（\`draft-ryan-httpauth-payment-00\`）で、ワイヤ細部はまだ変わりうる — 全体像（402 + Payment スキーム）と Tempo/Stripe リファレンス実装を学習対象に。コードは完全形。
+ここまでで「HTTP 402 + Core/Intents/Methods 3 層 + rail 中立」は着地した。仕様は IETF ドラフト（\`draft-ryan-httpauth-payment-00\`）で、ワイヤ細部はまだ変わりうる — 全体像（402 + Payment スキーム）と Tempo/Stripe リファレンス実装を学習対象に。コードは抜粋（実行時は公式実装参照）。
 
 > 🛑 **予測。** agent が 1 分 1000 件の有料 API リクエストを送る。都度オンチェーン Tempo tx で処理すると何が壊れるか、Intents 層はこれをどう解決するか？（答え: 都度決済は遅延・手数料で破綻（オンチェーン finality 待ち + gas）。Intents が \`charge\` と \`authorize/subscription\` を分離し、authorize はチャネルを 1 度開いてオフチェーン voucher を交換、close 時に決済。セッション単位のまとめ払いで agent スケールに対応。）
 

@@ -1,5 +1,5 @@
 // hand-written (NOT auto-generated): building-openhl-precompiles の概念ファースト版コース。
-// 散文（WHY）は圧縮し、学習者が copy-paste して走らせる実行物（型定義・関数本体・全テスト）は完全に保つ。
+// 散文（WHY）は圧縮し、学習者が手を動かせる実行物（型定義・関数本体・全テスト）を原則として保つ。
 
 import { PrismaClient } from '@prisma/client';
 
@@ -40,6 +40,8 @@ export async function seedRethOpenHlPrecompilesV3JA(prisma: PrismaClient) {
 ## 問い
 
 前コース（CLOB）は bridge が matching engine を所有する地点で終わった。だが **約定はまだ並列リストにすぎず**、同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB の状態と EVM の状態は別世界にある。どうやってスマートコントラクトが CLOB を read/write できるようにするか？
+
+> 注: OpenHL コースのコードブロックは原則として手元で実行可能な形で示す。ただし \`<file>\` などのプレースホルダや答え合わせ用コマンドは、各レッスンの指示に従って置換してから実行すること。
 
 ## 原理（最小モデル）
 
@@ -137,7 +139,9 @@ cargo test -p openhl-evm clob_fills_flow_into_payload --release 2>&1 | tail -5
 | L10 | 9d | \`2f796c3\` |
 
 \`\`\`bash
-cd ~/code/openhl-reference && git checkout <SHA>
+# レッスン範囲に応じて checkout:
+# 1761d4d / b635ef7 / a8823a1 / d19ba1b / 2f796c3 / 2ba97c6
+cd ~/code/openhl-reference && git checkout 1761d4d
 diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/precompiles/mod.rs
 \`\`\`
 

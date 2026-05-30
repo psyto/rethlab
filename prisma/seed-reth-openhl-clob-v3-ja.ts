@@ -1,5 +1,5 @@
 // hand-written (NOT auto-generated): building-openhl-clob の概念ファースト版コース。
-// 散文（WHY）は圧縮し、学習者が copy-paste して走らせる実行物（型定義・関数本体・全テスト）は完全に保つ。
+// 散文（WHY）は圧縮し、学習者が手を動かせる実行物（型定義・関数本体・全テスト）を原則として保つ。
 
 import { PrismaClient } from '@prisma/client';
 
@@ -40,6 +40,8 @@ export async function seedRethOpenHlClobV3JA(prisma: PrismaClient) {
 ## 問い
 
 前コース（Consensus）は実 Reth EVM を通じて 0.02 秒で block を確定する chain で終わった。だが確定していたのは **空の block** — トランザクションもマッチングも価格発見もない。どうやって約定（取引）を生成し、それを committed block に流すか？
+
+> 注: OpenHL コースのコードブロックは原則として手元で実行可能な形で示す。ただし \`<file>\` などのプレースホルダや答え合わせ用コマンドは、各レッスンの指示に従って置換してから実行すること。
 
 ## 原理（最小モデル）
 

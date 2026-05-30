@@ -38,6 +38,8 @@ export async function seedRethOpenHlLiquidationV3JA(prisma: PrismaClient) {
 
 前コース（Funding）で mark と index の乖離を funding payment で抑える仕組みは手に入った。だがトレーダーの損失が預け入れ collateral を超えたら？ その時ポジションを **consensus 内で** force-close し、不足分を吸収するエンジンを、float なしの決定論で作るには？
 
+> 注: OpenHL コースのコードブロックは原則として手元で実行可能な形で示す。ただし \`<file>\` などのプレースホルダや答え合わせ用コマンドは、各レッスンの指示に従って置換してから実行すること。
+
 ## 原理（最小モデル）
 
 - **perp はレバレッジ position。損失が collateral を食い \`equity / notional\` が maintenance margin を下回ると force-close。** 反対 side・フルサイズで close、liquidation fee を collateral から引いて insurance fund へ、equity が正なら残りをアカウントに返す。equity が負（underwater）なら不足分を insurance fund が吸収。
@@ -136,8 +138,14 @@ git checkout 22eedf9
 | Scanner + Capstone | L11〜13 | \`0a8464e\`（スキャナパート） |
 
 \`\`\`bash
-cd ~/code/openhl-reference && git checkout <SHA>
-diff -u ~/code/my-openhl/crates/liquidation/src/<file>.rs ./crates/liquidation/src/<file>.rs
+# レッスン範囲に応じて checkout:
+# 22eedf9 (計算), 260883b (保険基金), 0a8464e (スキャナ)
+cd ~/code/openhl-reference && git checkout 22eedf9
+diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/src/types.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/src/compute.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidation/src/insurance.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
 ## 合格基準

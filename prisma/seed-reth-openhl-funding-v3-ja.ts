@@ -38,6 +38,8 @@ export async function seedRethOpenHlFundingV3JA(prisma: PrismaClient) {
 
 前コース（Precompiles）は、コントラクトが同じ Reth node 上の CLOB を read/write できる地点で終わった。だが perp はまだ perp になっていない — mark price を index（spot）に anchor する仕組みがない。**永久先物には期限がないのに、価格はどうやって spot に引き寄せられるのか？**
 
+> 注: OpenHL コースのコードブロックは原則として手元で実行可能な形で示す。ただし \`<file>\` などのプレースホルダや答え合わせ用コマンドは、各レッスンの指示に従って置換してから実行すること。
+
 ## 原理（最小モデル）
 
 - **funding 支払いが mark を index に anchor する。** Mark > index（longs が spot 比で overpay）なら longs→shorts、Mark < index なら shorts→longs を、固定 interval（HL は 1 時間）ごとに支払う。これが期限なしでも価格を spot に縛る力。
@@ -126,7 +128,10 @@ git checkout cd94137
 
 \`\`\`bash
 cd ~/code/openhl-reference && git checkout cd94137
-diff -u ~/code/my-openhl/crates/funding/src/<file>.rs ./crates/funding/src/<file>.rs
+diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.rs
+diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/compute.rs
+diff -u ~/code/my-openhl/crates/funding/src/clock.rs ./crates/funding/src/clock.rs
+diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
 ## 合格基準
