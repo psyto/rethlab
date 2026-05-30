@@ -61,6 +61,13 @@ import { seedRethSecurityGovernanceEN } from './seed-reth-security-governance-en
 import { seedRethSecurityGovernanceJA } from './seed-reth-security-governance-ja';
 import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
 import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
+import { seedRethOpenHlConsensusV3JA } from './seed-reth-openhl-consensus-v3-ja';
+import { seedRethOpenHlAdlV3JA } from './seed-reth-openhl-adl-v3-ja';
+import { seedRethOpenHlClobV3JA } from './seed-reth-openhl-clob-v3-ja';
+import { seedRethOpenHlPrecompilesV3JA } from './seed-reth-openhl-precompiles-v3-ja';
+import { seedRethOpenHlFundingV3JA } from './seed-reth-openhl-funding-v3-ja';
+import { seedRethOpenHlLiquidationV3JA } from './seed-reth-openhl-liquidation-v3-ja';
+import { seedRethBuildingV3JA } from './seed-reth-building-v3-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
@@ -118,6 +125,7 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethSecurityGovernanceJA,
   seedRethOpenHlConsensusEN,
   seedRethOpenHlConsensusJA,
+  seedRethOpenHlConsensusV3JA,
   seedRethOpenHlClobEN,
   seedRethOpenHlClobJA,
   seedRethOpenHlPrecompilesEN,
@@ -128,6 +136,12 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethOpenHlLiquidationJA,
   seedRethOpenHlAdlEN,
   seedRethOpenHlAdlJA,
+  seedRethOpenHlAdlV3JA,
+  seedRethOpenHlClobV3JA,
+  seedRethOpenHlPrecompilesV3JA,
+  seedRethOpenHlFundingV3JA,
+  seedRethOpenHlLiquidationV3JA,
+  seedRethBuildingV3JA,
   seedRethFoundryEN,
   seedRethFoundryJA,
   seedRethPerpPrimerEN,
