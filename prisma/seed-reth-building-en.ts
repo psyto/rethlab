@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethBuildingEN(prisma: PrismaClient) {
-  const tags = ['reth', 'revm', 'alloy', 'rust', 'mev', 'building', 'application', 'capstone'];
+  const tags = ['building', 'mev', 'wallet', 'rpc', 'expert'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-building-en',
       title: 'Building with the Stack — Real-World Rust EVM Apps',
       description:
-        "Reading the source is the prerequisite. This tier is the payoff — ten working apps in Rust + Alloy + Revm, with at least one for every layer of the systems-engineering stack: MEV searcher (network + concurrency), reorg-aware Postgres indexer via ExEx (DB), custom RPC endpoint (network), wallet backend (concurrency + state), EIP-7702 sponsor service (authentication), Foundry-style cheatcode via custom precompile (VM), swap aggregator over forked DEX state (DB consistent-snapshot), a frontrun-resistant order router capstone (network + VM + auth integration), a cross-client validation harness (VM correctness), and an HTTP 402 / MPP machine-payments endpoint (network payment protocol).",
+        'Build the canonical Rust EVM applications. Ten labs ship with passing tests (the gate): MEV searcher, Tempo\'s tidx ExEx indexer, custom RPC, wallet backend, EIP-7702 sponsor, custom cheatcode, swap aggregator, frontrun-resistant order router (Capstone), revm differential tester, and Tempo MPP machine-to-machine payments. Every lab uses the forked-anvil + invariants test harness; every lab is transferable directly to production. By the end you can ship a real Rust EVM application with confidence.',
       difficulty: 'EXPERT',
-      duration: 420,
-      xpReward: 100,
+      duration: 454,
+      xpReward: 815,
       track: 'reth-building',
       tags,
       isPublished: true,
-      sortOrder: 410,
+      sortOrder: 800,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
@@ -26,21 +26,36 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Test gate — every app in this tier ships with passing tests',
+                  title: 'Lesson 0 — Test gate — every app in this tier ships with passing tests',
                   slug: 'building-test-gate-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 35,
-                  content: `# Test gate — every app in this tier ships with passing tests
+                  content: `# Lesson 0 — Test gate — every app in this tier ships with passing tests
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **quality-assurance discipline** that every serious infra company runs by. TigerBeetle, Cloudflare, PostgreSQL — none of them ship code without a green test gate, and "I read it and it looked right" has never been an accepted answer. This tier holds your apps to the same bar.
+## Question
+
+**Every lab in this course must ship with passing tests.** No exceptions. The test gate is what turns "I read the code" into "I built it" — and the same harness pattern (forked anvil + Alloy provider + invariants) is reused across every lab.
+
+## Principle (minimum model)
+
+- **The test-gate contract.** Each lab has a \`tests/\` directory with at least one passing test. CI fails if any test fails. The gate is a single line: \`cargo test --workspace --all-features\`.
+- **Forked anvil is the default harness.** \`Anvil::new().fork(MAINNET_RPC).fork_block_number(BLOCK).spawn()\` boots a deterministic anvil node forked at a pinned block. Tests run against real mainnet state without flakiness.
+- **Pinned block numbers are non-negotiable.** Without \`fork_block_number\`, the test depends on whatever mainnet looks like today → flaky. With it, the test is deterministic; reviewers can re-run identically.
+- **Invariants over snapshots.** Don't assert specific byte values; assert that conservation laws hold (\`amount + unfilled == shortfall\`, \`balance >= 0\`). Robust against future mainnet drift.
+- **The \`forked_provider_at(rpc, block)\` helper.** Every lab imports a tiny wrapper that boots forked anvil + returns a Provider. Centralised harness; per-lab boilerplate is ~3 lines.
+- **Why tests, not videos.** Building a working thing leaves an executable artifact. The test gate proves it works on someone else's machine, not just yours.
+
+## Worked example + steps
+
+# Test gate — every app in this tier ships with passing tests
+
 
 You spent four tiers reading source. From here on you build. The temptation, after months of reading, is to write code, read it back, satisfy yourself it looks right, and move on. **That is the failure mode this tier is engineered to prevent.**
 
 The rule for the rest of this tier: **a lesson is not complete until its test suite is green.** Not "I read the lesson, I built the thing, I think it works." Green tests, or you didn't ship it.
 
-> 🛑 **Predict.** Why is this rule strict for Building (Expert) and not for Foundations / Intermediate? Form a hypothesis before reading on.
 
 ---
 
@@ -153,7 +168,6 @@ For every Building lesson, completion means **a public-facing artifact** with:
 
 If any of these is missing, the lesson is not complete. **You ship the artifact and the proof together, or you do not ship.**
 
-> 🛑 **One-line gate check.** Before claiming any Building lesson done, answer: *"What command demonstrates the app is correct, and what is its current exit code?"* If you cannot answer in one sentence, you have not built it.
 
 ## A note on "I'll write tests later"
 
@@ -170,18 +184,40 @@ Open the next lesson — *Build a Minimal MEV Searcher in Rust* — and read it 
 That order — test first, code second — is the gate.
 
 > **🧭 Where you are now in the stack:** QA discipline is now the tier's gate. The 'prove with tests before shipping' standard that TigerBeetle, Cloudflare, and PostgreSQL all enforce, applied uniformly to every one of this tier's 10 apps. Next lesson starts building — MEV searcher first, with the test gate in front of the implementation.
+
+## Summary (3 lines)
+
+- Every Building lab ships with passing tests; CI gates on \`cargo test --workspace --all-features\`. The test is the proof of completion.
+- Forked anvil (\`Anvil::new().fork(...).fork_block_number(...)\`) + invariants is the canonical harness pattern. Pinned blocks make tests deterministic; invariants are robust over time.
+- \`forked_provider_at(rpc, block)\` is the shared helper; per-lab boilerplate is ~3 lines. Next lesson: Lab 1, MEV searcher.
 `,
                 },
                 {
-                  title: 'Build a Minimal MEV Searcher in Rust',
+                  title: 'Lab 1 — Build a Minimal MEV Searcher in Rust',
                   slug: 'build-mev-searcher-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build a Minimal MEV Searcher in Rust
+                  content: `# Lab 1 — Build a Minimal MEV Searcher in Rust
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer + concurrency runtime layer** combined. A searcher is an event-driven pipeline that pulls from multiple sources (mempool, new blocks) and dispatches actions — same shape as Kafka Streams topologies, Flink jobs, or HFT order-handling systems. \`artemis\` is that pattern applied to MEV.
+## Question
+
+An MEV searcher monitors the mempool, simulates profitable bundles, and submits them to a builder. **Build the minimum thing that does this end-to-end.** Mempool subscription + revm simulation + bundle submission, ~400 lines of Rust.
+
+## Principle (minimum model)
+
+- **Three components.** Mempool watcher (Alloy \`Provider::subscribe_pending_transactions\`) + revm simulator (fork mainnet at the latest block, simulate the candidate bundle) + bundle submitter (signed JSON-RPC to a builder endpoint).
+- **Mempool watcher.** \`provider.subscribe_pending_transactions().await?.into_stream()\` yields tx hashes. For each, \`provider.get_transaction(hash)\` fetches the full tx.
+- **Revm simulator.** Fork at the latest block (\`AnvilForkBackend\` or \`AlloyDB\`); run the candidate bundle (your tx + the user's tx) through revm; compute profit by diffing your balance before and after.
+- **Bundle submitter.** \`eth_sendBundle\` JSON-RPC to a builder like Flashbots (or a local builder for testing). The bundle is a list of signed txs with a target block number.
+- **Test gate.** Forked anvil at a block where a known profitable swap exists; simulate; assert profit > minimum threshold. Deterministic.
+- **Why this is the canonical lab.** MEV searching is the most common pattern for "watch chain, simulate, submit" — it transfers directly to liquidation bots, oracle keepers, and arbitrage bots.
+
+## Worked example + steps
+
+# Build a Minimal MEV Searcher in Rust
+
 
 A greenfield "you'd structure your bot like this" walkthrough lies about the shape of production. Real searchers don't start from \`main.rs\`. They start from a **framework** — and the one to read is Paradigm's [\`artemis\`](https://github.com/paradigmxyz/artemis), the Rust MEV-bot framework Paradigm open-sourced and continues to dogfood.
 
@@ -208,7 +244,6 @@ A searcher is an **event-processing pipeline**: external signals come in, MEV lo
 | **Strategy** | \`Strategy<E, A>\` | Event \`E\` → zero or more actions \`A\`. This is the MEV brain. The only file you actually write per opportunity. |
 | **Executor** | \`Executor<A>\` | Action \`A\` → side effect. Flashbots bundle submit, public-mempool send, off-chain order post. |
 
-> 🛑 **Predict before scrolling.** Why is the Executor trait separate from the Strategy trait? Form a one-sentence answer about *what changes break if you fuse them*. Hold your guess until Step 5.
 
 ## Step 1: Open the traits
 
@@ -252,7 +287,6 @@ Broadcast — so every strategy sees every event; every executor sees every acti
 
 **The whole point:** you ship a new strategy by writing one \`impl Strategy\` and calling \`engine.add_strategy(...)\`. Collectors and executors are reused.
 
-> 🛑 **Recall checkpoint.** Without scrolling: where is the cross-strategy coordination logic? (Answer: there isn't any. The engine doesn't coordinate strategies — they're independent consumers of the same event stream. Coordination, if you need it, lives inside a single strategy by composing collectors.)
 
 ## Step 3: Find the real Collectors and Executors
 
@@ -331,7 +365,6 @@ The arb contract itself is a separate piece of Solidity ([\`contracts/src/SudoOp
 
 The trait split isn't theoretical cleanliness — it's about **swapping submission paths without touching MEV logic**.
 
-> 🛑 **Predict.** Where would you add a private-mempool collector (e.g., Chainbound's Fiber, bloXroute) for the opensea-sudo-arb strategy? *Specifically:* which trait do you implement, what does it emit, and what (if anything) in \`strategy.rs\` has to change?
 
 (Answer: implement \`Collector<OpenseaOrder>\` — or \`Collector<Event>\` directly via \`CollectorMap\` — and register it on the engine. Zero changes to \`strategy.rs\`. That's the architecture working.)
 
@@ -383,7 +416,6 @@ If you stumbled on 2 or 4, re-read Steps 2 and 4 before the next lesson.
 
 Finish drill 5 and you have a working artemis-based searcher skeleton ready for whatever MEV logic you want to ship into it.
 
-> 🛑 **Final check.** In one sentence: what does artemis give you that writing a one-off \`main.rs\` doesn't? If your answer doesn't mention *reuse across strategies* or *swappable submission paths*, re-read Step 5 — that's the whole reason the abstraction exists.
 
 ## Test gate
 
@@ -444,18 +476,41 @@ The full **Building with the Stack** tier ships ten lessons end to end. From her
 Each is a self-contained ~200–300 line build with the same predict / find-in-repo / anti-fluency style. Pick the one that maps to your target use case.
 
 > **🧭 Where you are now in the stack:** you've shipped a **networking × concurrency** application — event-driven pipeline (artemis collectors → strategies → executors) applied to MEV, with the test gate (forked-state arb replay + reorg integrity) locking in correctness. Same shape Kafka Streams and HFT order handlers ship. Next lesson moves to the **database layer**: a reorg-aware indexer driven by ExEx.
+
+## Summary (3 lines)
+
+- Minimal MEV searcher = mempool watcher + revm simulator + bundle submitter, ~400 lines of Rust. End-to-end loop in three Alloy + revm calls.
+- Test gate = forked anvil at a known-profitable block; assert profit > threshold. Deterministic.
+- "Watch chain, simulate, submit" is the canonical pattern; transfers to liquidation bots / oracle keepers / arbitrage bots. Next: ExEx indexer.
 `,
                 },
                 {
-                  title: "Read a Real Production Indexer — Tempo's tidx",
+                  title: 'Lab 2 — Read a Real Production Indexer — Tempo\'s tidx',
                   slug: 'build-exex-indexer-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Read a Real Production Indexer — Tempo's tidx
+                  content: `# Lab 2 — Read a Real Production Indexer — Tempo's tidx
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **database layer**, specifically the OLTP + OLAP dual-storage problem. Every serious analytics platform — Snowflake's split engines, ClickHouse + PostgreSQL combinations, real-time data warehouses — picks where point-lookups and range-scans live separately. \`tidx\` is that pattern applied to chain data.
+## Question
+
+Tempo's \`tidx\` is a production-grade indexer built on Reth's ExEx (Execution Extension) API. **Read the real source** — see how production code handles reorgs, schema migrations, and backfill. Three thousand lines of Rust you can use as a template.
+
+## Principle (minimum model)
+
+- **ExEx = the Reth-native indexing API.** A subscriber that receives \`Committed\` / \`ChainReorged\` / \`Reverted\` notifications as Reth syncs. Tightly integrated with the node's state.
+- **Three notification variants.** Committed (new blocks) / ChainReorged (reorg happened, undo old + apply new) / Reverted (rollback, undo last N blocks). Production indexers must handle all three.
+- **\`tidx\` architecture.** ExEx receiver → handler dispatch (per event type) → batched writes to Postgres → schema-migration manager. ~3K lines of Rust.
+- **Reorg handling pattern.** On ChainReorged, undo the old chain's effects (delete rows matching old block numbers) → apply the new chain. Idempotent writes.
+- **Schema migrations.** Tempo uses \`refinery\` for SQL migrations; the indexer runs migrations before starting subscription. Forward-only; never modify deployed migrations.
+- **Backfill mode.** When starting fresh, replay history from a known block. ExEx exposes a backfill API; production indexers always have a backfill mode.
+- **What carries over.** The Committed/ChainReorged/Reverted handling pattern is universal to any chain indexer. Even non-Postgres backends (ClickHouse / DuckDB) use the same handler dispatch.
+
+## Worked example + steps
+
+# Read a Real Production Indexer — Tempo's tidx
+
 
 Etherscan and Dune are indexers. Their architectures are not public. [\`tidx\`](https://github.com/tempoxyz/tidx) is — Tempo's production indexer for its EVM L1, open source, in active use. This lesson walks you through it. You'll see what they had to choose, what they got right, and what trade-offs are visible only by reading the source.
 
@@ -483,7 +538,6 @@ Ask each store the other's question and you die:
 - *"Daily volume for the past year"* on PostgreSQL: read every row of every page that contains a Transfer in that range. Disk-bound. Tens of seconds to minutes on a real dataset.
 - *"Last 10 transfers from 0xAlice"* on ClickHouse: ClickHouse has no point-lookup index; it scans. Wasted IO when the answer is 10 rows.
 
-> 🛑 **Predict before scrolling.** If you only had PostgreSQL, name one query class that would kill your indexer. If only ClickHouse, name one query class that would kill it. Hold both answers in mind — the rest of the lesson is how tidx avoids both deaths.
 
 tidx's resolution: **write to both, route on read.** Same chain data lands in both engines; the HTTP API picks the engine based on the query (or an explicit \`?engine=\` override).
 
@@ -526,7 +580,6 @@ Walk:
 - **PG is a single transaction; CH is four direct inserts.** PostgreSQL's \`write_batch\` puts all four tables (blocks/txs/logs/receipts) in one transaction so a crash leaves nothing partial. ClickHouse doesn't do multi-table transactions — it's append-only, so partial-batch on crash is the chunk-retry path's job ([\`src/sync/ch_sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/ch_sink.rs), the \`CH_MAX_RETRIES\` loop).
 - **CH is \`Option\`-al.** If you don't configure ClickHouse, tidx degrades cleanly to PG-only. The OLAP queries just stop being available.
 
-> 🛑 **Predict.** A naive dual-sink would mean every chain read becomes two writes. What ordering guarantee does \`write_all\` give a reader? Specifically: can you query CH for block N and find it missing while PG already has it? Read the \`try_join!\` semantics and answer.
 
 (Answer: yes, briefly — \`try_join!\` returns when both succeed, but between the two completing, a reader hitting CH first will see stale state. tidx accepts this; the ClickHouse backfill cursor — \`ch_backfill_block\` in \`sync_state\` — exists precisely to repair these gaps after the fact.)
 
@@ -586,7 +639,6 @@ What this costs: storing every log on every contract, ever, even ones you'll nev
 
 What this buys: **a question you didn't pre-register is answerable.** A new token launches; you query it from minute one. A new event signature shows up; you decode it without backfilling. The trade-off is "spend disk to keep the question space open" — and disk is cheap.
 
-> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why can tidx skip pre-registration that Subgraph requires? What's different about *where* the decoding happens? Hint: think about where the ABI lives in the two systems.
 
 ## Step 5: Query routing — engine selection
 
@@ -686,7 +738,6 @@ If you stumbled on 3, 4, or 6, re-read Steps 2, 4, and 8 before the next lesson.
 
 Finish drill 5 and you have a running tidx instance indexing a real chain with both engines online.
 
-> 🛑 **Final check.** In one sentence: what does tidx's dual-storage design buy you that a single-database indexer can't? If your answer doesn't mention *both* "point lookup latency" and "analytics scan throughput," re-read the opening — that tension is the whole architecture.
 
 ## Test gate
 
@@ -730,18 +781,40 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
 \`\`\`
 
 > **🧭 Where you are now in the stack:** you've shipped a **database-layer** application — OLTP + OLAP dual-storage design read off tidx's source, with the fixture-chain-replay test gate locking in reorg handling. The same shape Snowflake and ClickHouse + Postgres combinations solve, applied to chain data. Next lesson moves to the **networking layer**: a server-side RPC extension via \`extend_rpc_modules\`.
+
+## Summary (3 lines)
+
+- \`tidx\` = Tempo's production indexer on Reth ExEx, ~3K lines of Rust. ExEx receiver → per-event handler dispatch → batched Postgres writes + refinery schema migrations.
+- Three notification variants (Committed / ChainReorged / Reverted) — production indexers must handle all three. Idempotent writes; backfill mode is standard.
+- The handler-dispatch pattern transfers to any chain indexer regardless of backend (Postgres / ClickHouse / DuckDB). Next: custom RPC endpoint.
 `,
                 },
                 {
-                  title: 'Build a Custom RPC Endpoint on Reth',
+                  title: 'Lab 3 — Build a Custom RPC Endpoint on Reth',
                   slug: 'build-custom-rpc-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Build a Custom RPC Endpoint on Reth
+                  content: `# Lab 3 — Build a Custom RPC Endpoint on Reth
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's server-side extension**. Same problem any database or service that exposes RPC faces — "let users add custom queries that run server-side rather than round-tripping raw data to clients." PostgreSQL stored procedures, GraphQL custom resolvers, gRPC service extensions all solve variations of this. Custom Reth RPC is that pattern for an Ethereum execution client.
+## Question
+
+You need an RPC method that doesn't exist in standard Ethereum — e.g. \`tempo_getPaymentReceipts(merchant: Address)\`. **Reth makes adding one a 50-line drop-in.** Register an RPC trait, implement the method, the node serves it.
+
+## Principle (minimum model)
+
+- **Reth RPC trait registration.** \`#[rpc(server)]\` macro on a trait → generates the RPC server boilerplate. \`impl YourRpcServer for YourImpl { ... }\` provides the body.
+- **\`NodeBuilder\` integration.** \`NodeBuilder::extend_rpc_modules(|modules| modules.merge_configured(your_rpc.into_rpc())?)\` registers the custom RPC at node startup.
+- **Access to state inside the RPC.** Inject \`Arc<dyn StateProvider>\` into your impl. Use \`provider.account_basic(addr)?\` / \`provider.storage(addr, slot)?\` to read state.
+- **Async vs sync RPC methods.** \`#[rpc(server)]\` supports both. Async methods use \`Box<dyn Future>\` under the hood; sync methods are direct calls.
+- **Test the RPC over the wire.** Spin up the node in a test, call the RPC via \`reqwest::post(url).json(&body)\`, assert the response.
+- **Common custom RPCs.** Payment receipt fetcher (Tempo) / MEV-bundle simulator (Flashbots) / lending protocol-specific queries / app-chain-specific batched reads.
+
+## Worked example + steps
+
+# Build a Custom RPC Endpoint on Reth
+
 
 You need a single API call that returns a histogram of pending tx gas prices for your fee-bidding bot. The standard \`txpool_content\` returns *every pending tx in full* — hundreds of KB you'd reduce to 10 numbers anyway. The right move: add a server-side method that does the aggregation **inside the node** and ships back the histogram. ~50 lines of Rust. No Reth fork. Live on the same HTTP / WebSocket / IPC endpoints as the native namespaces (\`eth_*\`, \`net_*\`, \`debug_*\`, \`txpool_*\`, …).
 
@@ -789,7 +862,6 @@ flowchart LR
     Bucket -->|JSON| Client
 \`\`\`
 
-> 🛑 **Predict before scrolling.** Why is *server-side aggregation* the win here? Form a one-sentence answer about payload sizes — what does \`txpool_content\` return vs. what your dashboard actually needs? Hold your guess.
 
 ## Why a custom RPC, not a workaround
 
@@ -910,7 +982,6 @@ Walk:
 - **\`max_priority_fee_per_gas\`** — what we bucket on. (Real searchers also factor in base fee; for clarity we use just the priority fee.)
 - **The inner loop is \`O(buckets * pending)\`** — fine for typical pool sizes (~10K). For 100K+ pending pools, switch to binary search on the bucket array.
 
-> 🛑 **Anti-fluency check.** Without scrolling: why is \`pool.pending()\` cheap to call here, but a real \`txpool_content\` RPC is heavy? Hint: think about what \`pending()\` returns vs. what \`txpool_content\` materializes for the wire.
 
 ## Step 3: Wire into NodeBuilder
 
@@ -1053,7 +1124,6 @@ The architecture you wrote — define trait, impl with component access, registe
 
 Finish drill 5 and you've closed the loop: a node that exposes node-only insight as a typed RPC, consumed by a separate Rust process that uses that insight to compete in the mempool. **That round trip — observability via custom RPC, behavior via a separate consumer — is how real searcher / market-maker stacks are organized.**
 
-> 🛑 **Final check.** In one sentence: why is \`extend_rpc_modules\` strictly more powerful than running a sidecar service that calls Reth's standard RPC? If your answer doesn't mention "in-process access to node components", re-read Step 3 — that access is the leverage.
 
 ## Test gate
 
@@ -1101,18 +1171,39 @@ The lesson is **not complete** until: (1) the success path test passes, (2) at l
 
 > **🧭 Where you are now in the stack:** you've shipped a **networking-layer server-side extension** — jsonrpsee aggregation + subscription wired to a Reth pool stream, locked in with in-process integration + error-code + subscription-leak tests. Same shape GraphQL custom resolvers and Postgres stored procedures solve, applied to Reth RPC. Next lesson moves to the **concurrency + state-management layer**: a wallet backend.
 
+## Summary (3 lines)
+
+- Custom RPC on Reth = \`#[rpc(server)]\` macro + \`NodeBuilder::extend_rpc_modules\`. ~50 lines for a new method.
+- State access via injected \`Arc<dyn StateProvider>\`. Async or sync methods both supported.
+- Test over the wire via reqwest. Common custom RPCs: payment receipts (Tempo), MEV simulator, lending queries. Next: wallet backend.
 `,
                 },
                 {
-                  title: 'Build a Wallet Backend in Rust',
+                  title: 'Lab 4 — Build a Wallet Backend in Rust',
                   slug: 'build-wallet-backend-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build a Wallet Backend in Rust
+                  content: `# Lab 4 — Build a Wallet Backend in Rust
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **concurrency runtime + state-management layer**. Same problem every payment gateway, message queue, and database write coordinator solves — "many concurrent submissions, monotonically increasing per-tenant sequence numbers, retry-and-replace on stuck items." Stripe payment intents, Kafka producer idempotence, bank transfer queues all wrestle with the same shape. The wallet backend is that pattern for EVM transactions.
+## Question
+
+A wallet backend has three jobs: track balances, sign transactions, monitor incoming activity. **Build it as a long-running Rust service** — Tokio actors + Alloy provider + a key-management module behind a trait.
+
+## Principle (minimum model)
+
+- **Three actors.** Balance tracker (poll/subscribe → in-memory cache) + transaction signer (key access via trait) + event monitor (subscribe to incoming transfers / approvals / etc).
+- **Tokio actor pattern.** Each actor is a struct with an \`mpsc::Sender\` for requests + a \`tokio::spawn\`ed event loop. Communicate via message passing; no shared mutex.
+- **Key management trait.** \`trait KeyStore { fn sign(&self, addr: Address, hash: B256) -> Signature; }\`. Implementations: \`LocalKeyStore\` (file), \`KmsKeyStore\` (AWS KMS), \`HsmKeyStore\` (hardware). Same trait; different blast radius.
+- **Balance tracking.** Subscribe to new blocks; for each block, fetch balances for tracked addresses. Batch via \`eth_call\` multicall to reduce round trips.
+- **Event monitor.** Subscribe to log filters (Transfer / Approval / etc) matching tracked addresses. Push notifications to downstream services.
+- **Test gate.** Forked anvil + a mock keystore; assert signing produces a valid signature + balance updates after a state change.
+
+## Worked example + steps
+
+# Build a Wallet Backend in Rust
+
 
 A user clicks "Send" fifty times in a minute. Your wallet has to: pick the next *nonce* (the per-account counter Ethereum uses to order transactions) without colliding, sign with the right key, broadcast, watch the mempool, and — when gas spikes from 5 gwei to 80 gwei mid-flight — **bump the fee on stuck txs and replace them** so the user's session doesn't deadlock behind a single dust-priced transaction. Wallet UIs are the famous part. The send service behind them is the part teams actually wrestle with. ~250 lines of Rust below — signer pool, nonce manager, send queue, replace-on-stuck, confirm watcher.
 
@@ -1158,7 +1249,6 @@ flowchart TB
     Bump --> Q
 \`\`\`
 
-> 🛑 **Predict before scrolling.** The naive way is "fetch nonce from RPC, sign, send". Walk through what breaks if you POST /send twice within 100 ms for the same from-address. **Form a one-sentence answer about what specifically goes wrong.** Hold your guess.
 
 ## Why this is hard
 
@@ -1448,7 +1538,6 @@ Walk:
 - **Bump strategy is 25%, repeated.** Each cycle that misses the deadline triples down. After 3 bumps a tx that started at 5 gwei is at \`5 × 1.25³ ≈ 9.77\` gwei. Real production caps at a configurable max to avoid blowing budget on a network-wide spike.
 - **The \`expect("signer missing")\`** — by construction, anything in the queue was signed by a key in the pool. Panicking here means our invariant is broken; better than silently dropping.
 
-> 🛑 **Anti-fluency check.** Without scrolling: why does the watcher *replace* a stuck tx with a same-nonce, higher-fee version, instead of just *waiting longer*? Hint: think about **what blocks the next nonce** when the previous one is stuck.
 
 ## Step 5: HTTP API skeleton (axum)
 
@@ -1560,7 +1649,6 @@ The architecture you wrote — signer pool, nonce manager, send path, background
 
 Finish drill 5 and you have a wallet backend that real users could rely on, modulo key custody. Wire in HSM-backed signing and you're at parity with what wallet teams ship.
 
-> 🛑 **Final check.** In one sentence: why is **local nonce state** the load-bearing piece of this design, even though every other layer (signing, gas, watcher) gets more attention? If your answer doesn't mention "concurrent sends without RPC roundtrip per nonce", re-read Step 1 — that's why nonce management is the part that's hard.
 
 ## Test gate
 
@@ -1616,18 +1704,40 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
 \`\`\`
 
 > **🧭 Where you are now in the stack:** you've shipped the **concurrency + state-management layer's wallet backend** — signer pool, monotonic nonce manager, send queue, replace-on-stuck, watcher with reorg awareness. Same shape as Stripe payment intents and Kafka producer idempotence, applied to EVM transactions. Next lesson moves to the **authentication layer**: delegated authorization via EIP-7702.
+
+## Summary (3 lines)
+
+- Wallet backend = three Tokio actors (balance tracker + signer + event monitor). Message passing; no shared mutex.
+- \`trait KeyStore\` abstracts local / KMS / HSM behind one interface; same code, different blast radius.
+- Multicall for batched balance reads; event-log subscription for incoming activity. Test gate via forked anvil + mock keystore. Next: 7702 sponsor.
 `,
                 },
                 {
-                  title: 'Build a Minimal EIP-7702 Sponsor Service in Rust',
+                  title: 'Lab 5 — Build a Minimal EIP-7702 Sponsor Service in Rust',
                   slug: 'build-7702-sponsor-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build a Minimal EIP-7702 Sponsor Service in Rust
+                  content: `# Lab 5 — Build a Minimal EIP-7702 Sponsor Service in Rust
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **authentication layer**, specifically delegated authorization. Same concept as OAuth 2's "let one entity authorize actions on behalf of another," DocuSign's signature delegation, or any meta-transaction relayer. EIP-7702 + a sponsor service is that pattern expressed on Ethereum — Alice signs intent, the sponsor pays gas, the chain enforces the delegation cryptographically.
+## Question
+
+EIP-7702 lets an EOA temporarily delegate to a smart contract. **A sponsor service signs the delegation + pays the gas**, enabling gasless UX for users. Build it as a 400-line Rust service.
+
+## Principle (minimum model)
+
+- **What EIP-7702 does.** Adds a new tx type (0x04) where an EOA includes a \`setCode\` authorization. The EOA temporarily behaves like a smart contract during the tx.
+- **Sponsor flow.** User signs an authorization (delegating to a contract address) → sends it to the sponsor → sponsor wraps it in a tx, pays gas, submits to the chain → user gets the result.
+- **Authorization signature.** \`keccak256(MAGIC + chain_id + nonce + delegate_address)\` signed with the user's key. Standard secp256k1.
+- **Sponsor revenue model.** Charge a fee (in stable coin / ERC-20 / off-chain subscription) or absorb cost as a feature. Tempo charges via a USDC pre-payment.
+- **Rate limiting + abuse prevention.** Per-user nonce tracking; rate-limit by user; sanity-check the delegate contract before signing.
+- **Test gate.** Forked anvil at a 7702-enabled block; submit a sponsored tx; assert the EOA executed with the delegated code.
+
+## Worked example + steps
+
+# Build a Minimal EIP-7702 Sponsor Service in Rust
+
 
 Alice has an EOA (Externally Owned Account — a regular wallet keypair, not a smart contract). She wants to swap two tokens in one click without first holding ETH for gas, and without migrating to a smart-contract account. EIP-7702 (live on mainnet since the Pectra fork, March 2025) is how: she signs an off-chain *authorization* that says "for this transaction, treat my EOA as if it had this contract's code." A **sponsor** — your service — wraps that authorization in a transaction it pays gas for. Alice gets atomic batched calls, custom validation, session keys. Same address, same keys, no migration. ~200 lines of Rust below.
 
@@ -1685,7 +1795,6 @@ flowchart TB
     Chain -->|delegated code runs<br/>AS Alice's address| Effects["Token transfer +<br/>Router swap atomically"]
 \`\`\`
 
-> 🛑 **Predict before scrolling.** Why does the sponsor (Bob) need to be the \`from\` of the Type 4 tx, not Alice? Form a one-sentence answer about **what \`from\` means** in EIP-1559 vs. who the *authorization* is on behalf of. Hold your guess.
 
 ## Why a sponsor service vs. native smart-account
 
@@ -1836,7 +1945,6 @@ Walk:
 - **\`with_authorization_list(vec![signed_auth])\`** — the line that makes this a Type 4. Add multiple \`SignedAuthorization\`s here and you're now batching multiple users into one tx (drill 3).
 - **The delegate's \`executeBatch\` is a convention, not a protocol mandate.** Most EIP-7702 delegate contracts in the wild expose a similar method (see OpenZeppelin's reference impl). Pick the convention your delegate uses.
 
-> 🛑 **Anti-fluency check.** Without scrolling: when Bob (sponsor) submits this tx, **whose nonce increments**? Bob's, Alice's, both? Hint: think about which nonce is in the outer tx envelope vs. what the authorization's \`nonce\` field is for.
 
 ## Step 3: Submit + wait for inclusion
 
@@ -1961,7 +2069,6 @@ The architecture you wrote — accept signed authorization + intent, wrap in Typ
 
 Finish drill 5 and you have a sponsor service ready for an internal app. Add SDK + spending policy + observability and you're shipping the Privy-style developer experience.
 
-> 🛑 **Final check.** In one sentence: why does EIP-7702 specifically (vs. EIP-4337) make sponsorship so much *cheaper* to operate? If your answer doesn't mention "no entry-point contract overhead" and "single tx vs. UserOp wrapping", re-read the 90-second refresher — that's the whole reason 7702 exists.
 
 ## Test gate
 
@@ -2021,18 +2128,41 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running y
 \`\`\`
 
 > **🧭 Where you are now in the stack:** you've shipped an **authentication-layer** application — delegated authorization implemented via 7702, with replay protection and gas-accounting honesty locked in by the test gate. Same concept as OAuth 2 and DocuSign signature delegation, expressed natively on Ethereum. Next lesson moves to the **VM layer**: a Foundry-style cheatcode via custom precompile.
+
+## Summary (3 lines)
+
+- EIP-7702 sponsor = tx-type-0x04 wrapper that signs authorization + pays gas. Enables gasless UX.
+- Flow: user signs auth → sponsor wraps + pays gas → submits. Revenue via USDC pre-payment (Tempo pattern) or feature absorption.
+- Rate limiting + delegate sanity-check are mandatory. Test gate via forked anvil at a 7702-enabled block. Next: Foundry-style cheatcode.
 `,
                 },
                 {
-                  title: 'Build Your Own Foundry-Style Cheatcode in Rust',
+                  title: 'Lab 6 — Build Your Own Foundry-Style Cheatcode in Rust',
                   slug: 'build-foundry-cheatcode-en',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build Your Own Foundry-Style Cheatcode in Rust
+                  content: `# Lab 6 — Build Your Own Foundry-Style Cheatcode in Rust
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's extension mechanism**. Same pattern as JNI (Java Native Interface), Python C extensions, V8 native bindings — "let the VM call out to native code via a stable ABI." Foundry cheatcodes are that pattern, EVM-flavored: a custom precompile at a magic address that the VM dispatches to a Rust function.
+## Question
+
+Foundry cheatcodes are precompiles at \`0x71097...\`. **Build a custom one.** Reth SDK lets you register a precompile that intercepts a magic address — same pattern as Foundry's \`vm.warp\` / \`vm.deal\`.
+
+## Principle (minimum model)
+
+- **Precompile = a Rust function at a fixed address.** When the EVM calls that address, Reth dispatches to your function instead of executing bytecode.
+- **Reth SDK precompile registration.** \`EvmConfig::with_precompiles(vec![(address, precompile_fn)])\` adds your precompile to the node's EVM config.
+- **Cheatcode contract.** Your precompile receives calldata; decode it as \`(operation_id, ...args)\`; execute the cheat (warp time / deal balance / etc); return data.
+- **Calldata decoding via \`alloy_sol_types::SolValue\`.** \`<(uint256, address)>::abi_decode(&calldata, true)?\` — type-safe ABI decoding.
+- **State mutation in a precompile.** Get the journal database; call \`db.touch(addr)?\` / \`db.set_balance(addr, value)?\` / \`db.set_storage(addr, slot, value)?\`.
+- **Test gate.** Spin up a Reth node with your precompile registered; call from a Solidity test; assert the state changed.
+- **Use cases.** Production sequencers ship custom cheatcodes for testing (Tempo / Hyperliquid / OP-stack); MEV searchers ship them for simulation.
+
+## Worked example + steps
+
+# Build Your Own Foundry-Style Cheatcode in Rust
+
 
 When you write \`vm.deal(alice, 100 ether)\` in a Foundry test, **that's not an EVM opcode**. It's a Rust function — a *precompile* (a built-in contract whose code lives in the EVM engine, not on chain) — that Foundry installs at the magic address \`0x7109709E...\` and exposes to Solidity via the \`Vm.sol\` interface. Same for \`vm.warp()\`, \`vm.expectRevert()\`, the whole cheatcode surface. **You can ship your own.** This lesson builds \`cheats.measureGas(target, data)\` — a precompile that lets test authors measure sub-call gas without manual wrapping — using the exact pattern Foundry uses internally.
 
@@ -2077,7 +2207,6 @@ flowchart TB
     Cheats -->|abi-encoded uint256| Test
 \`\`\`
 
-> 🛑 **Predict before scrolling.** Why is implementing this as a **precompile** the right call, instead of a regular Solidity contract? Form a one-sentence answer about **what a precompile can do that a regular contract can't**. Hold your guess.
 
 ## Why precompile (not contract, not opcode)
 
@@ -2196,7 +2325,6 @@ Walk:
 - **All three result variants return \`gas_used\`** — Success, Revert, Halt. Even reverted txs consumed gas. We return the real number; the test author can decide what counts.
 - **\`db = EmptyDB\` in this lesson is a simplification.** Real Foundry cheatcodes share state with the parent test EVM via a custom Inspector hook (because \`vm.deal()\` needs to mutate balances the parent test will see). Drill 3 explores that.
 
-> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why does the **\`gas_used\`** returned here include the gas the *target contract* consumed but **not** the gas the cheatcode call itself paid? Hint: the precompile's \`21_000\` flat cost is on the *outer* frame, not the inner one.
 
 ## Step 3: Wire into a Revm test harness
 
@@ -2324,7 +2452,6 @@ The architecture you wrote — high-address precompile + selector dispatch + ABI
 
 Finish drill 4 and you have, structurally, a fork of Foundry. Add fuzz testing + invariant testing on top and you're at parity with what's in the wild.
 
-> 🛑 **Final check.** In one sentence: why is **selector-dispatched ABI-decoded args** the thing that makes a precompile feel like a Solidity contract from the test author's side? If your answer doesn't mention "Solidity already knows how to encode calls to addresses", re-read Step 1 — that ABI compatibility is what makes the deception possible.
 
 ## Test gate
 
@@ -2380,18 +2507,41 @@ sJpLesson 21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the chea
 \`\`\`
 
 > **🧭 Where you are now in the stack:** you've shipped a **VM-layer extension** — a custom precompile registered at a high address that dispatches into a Rust function, with differential fuzz against a Solidity reference locking in correctness. Same pattern as JNI and V8 native bindings, applied to Revm. Next lesson moves to the **database layer's consistent-snapshot read**: a swap aggregator over forked DEX state.
+
+## Summary (3 lines)
+
+- Custom cheatcode = a Rust precompile at a chosen address. \`EvmConfig::with_precompiles\` registers; Reth dispatches.
+- Calldata decode via \`alloy_sol_types::SolValue\`. State mutation via the journal database (\`set_balance\` / \`set_storage\` etc).
+- Used by production sequencers (Tempo / Hyperliquid / OP-stack) for testing + by MEV searchers for simulation. Next: swap aggregator.
 `,
                 },
                 {
-                  title: 'Build a Swap Aggregator: DEX State, Forked, in Rust',
+                  title: 'Lab 7 — Build a Swap Aggregator: DEX State, Forked, in Rust',
                   slug: 'build-swap-aggregator-en',
                   type: 'CONTENT',
                   sortOrder: 7,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build a Swap Aggregator: DEX State, Forked, in Rust
+                  content: `# Lab 7 — Build a Swap Aggregator: DEX State, Forked, in Rust
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **database layer's consistent-snapshot read**, applied to DEX state. Same problem MVCC databases solve — "read N values atomically, all from one consistent point in time." Forking mainnet at a pinned block gives every quote the same database snapshot to read from; the rest is per-DEX math on top of that consistent view.
+## Question
+
+A swap aggregator reads DEX pool state, simulates trades across multiple DEXes, and routes to the best price. **Build the minimum aggregator** — Uniswap V2 + V3 pool reads + revm simulation + best-path selection, ~500 lines of Rust.
+
+## Principle (minimum model)
+
+- **Three components.** Pool-state fetcher (read reserves / sqrt-price / ticks from each DEX) + simulator (revm fork, try each path) + best-path selector (pick max output).
+- **Pool state via Alloy contract bindings.** \`sol! { contract IUniswapV2Pair { ... } }\` generates type-safe bindings; \`contract.getReserves().call().await?\` reads state.
+- **Multicall for batched pool reads.** Read 20+ pools in one RPC call via \`Multicall3\`. Reduces latency from N round trips to 1.
+- **Path simulation.** For each candidate path (e.g. USDC → ETH → DAI vs USDC → DAI direct), simulate in revm; compute output amount. Pick max.
+- **Slippage handling.** Add a \`min_out\` parameter; reject paths whose output is below threshold.
+- **MEV-aware variant.** Submit the winning path as a private bundle (via Flashbots) to avoid front-running.
+- **Test gate.** Forked anvil at a known-state block; simulate a swap; assert the output matches the expected best path.
+
+## Worked example + steps
+
+# Build a Swap Aggregator: DEX State, Forked, in Rust
+
 
 A user wants to swap 10,000 USDC for ETH. Uniswap V2 will give them 2.948 WETH. Sushi gives 2.946. Uniswap V3 gives 2.951. The aggregator's job: **fan out the same quote to every venue at the same instant, compare, pick the winner.** That's what 1inch, Paraswap, and 0x do under the hood. ~250 lines of Rust below: fork mainnet locally with Revm (so every quote reads the *same* atomic state), pull reserves from Uniswap V2 + Sushi + Uniswap V3, compute the output, pick the best.
 
@@ -2432,7 +2582,6 @@ flowchart TB
     Quote --> Pick["Pick best (post-fee, post-gas)"]
 \`\`\`
 
-> 🛑 **Predict before scrolling.** Why **fork** and read on-chain state, instead of using the **chain's RPC** directly to call \`getReserves\` on each pool? Form a one-sentence answer about *what fork buys you that direct RPC doesn't*. Hold your guess.
 
 ## Why fork (vs direct RPC)
 
@@ -2590,7 +2739,6 @@ Walk:
 - **Integer-only** — no floats, no panics. \`U256\` arithmetic carries the precision the EVM uses on-chain. **Your quote will match the on-chain swap to the wei.**
 - **Fee in basis points lets you support Uniswap, Sushi, custom-fee forks** with the same code.
 
-> 🛑 **Anti-fluency check.** Without scrolling: why does \`amount_in_with_fee * pool.reserve_out\` go in the **numerator** and not the denominator? Hint: think about what it means dimensionally — \`[in_with_fee] * [reserve_out]\` produces what units?
 
 ## Step 4: V3 quote (more complex math, simpler approach)
 
@@ -2729,7 +2877,6 @@ The architecture you wrote — fork once, read reserves atomically, compute quot
 
 Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in MEV protection ([Lesson 8](/courses/reth-building-en/lessons/build-capstone-router-en)) and you're at parity with what shipped in 2023.
 
-> 🛑 **Final check.** In one sentence: why is **forking** strictly better than **N parallel \`eth_call\`s** for an aggregator? If your answer doesn't mention "atomic state across all reads", re-read Step 1 — that atomicity is what makes the comparison sound.
 
 ## Test gate
 
@@ -2774,18 +2921,40 @@ The lesson is **not complete** until the QuoterV2 differential passes. If your m
 
 > **🧭 Where you are now in the stack:** you've shipped an aggregator that applies **database-layer consistent-snapshot read** to DEX state — every quote runs against the same Revm-forked snapshot at a pinned block, with QuoterV2 differential locking in precision to 5 bps. Same shape as MVCC databases' atomic multi-key read. Next lesson is the **capstone**: integrate networking + compiler + authentication layers into a frontrun-resistant order router.
 
+## Summary (3 lines)
+
+- Swap aggregator = pool fetcher (multicall) + revm simulator (multi-path) + best-path selector. ~500 lines of Rust.
+- \`sol!\` contract bindings make pool reads type-safe; Multicall3 batches reads; revm fork simulates each path; pick max output.
+- Slippage via \`min_out\`; MEV-resistance via private bundle submission. Test gate at a pinned forked block. Next: Capstone — frontrun-resistant router.
 `,
                 },
                 {
-                  title: 'Capstone — Build a Frontrun-Resistant Order Router',
+                  title: 'Lab 8 — Capstone — Build a Frontrun-Resistant Order Router',
                   slug: 'build-capstone-router-en',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 60,
                   xpReward: 100,
-                  content: `# Capstone — Build a Frontrun-Resistant Order Router
+                  content: `# Lab 8 — Capstone — Build a Frontrun-Resistant Order Router
 
-> 🧭 **Where this lives in the systems-engineering stack:** **integration across networking + compiler + authentication layers**. Same shape as an HFT order router, a CDN edge router, or an API gateway with adaptive routing — "multi-source input, simulate the consequences, decide a path, dispatch through the right submission channel." The router is that pattern realized for EVM transaction routing under MEV adversaries.
+## Question
+
+The Capstone combines everything: aggregator routing + MEV-aware private submission + sponsored execution + tested invariants. **Build a production-shape order router** in ~800 lines of Rust.
+
+## Principle (minimum model)
+
+- **Architecture.** RPC frontend (accept user orders) + aggregator (best path via revm) + frontrun protection (private bundle via Flashbots) + sponsored execution (EIP-7702 + gas payment).
+- **Order intent.** User submits \`(token_in, token_out, amount_in, min_out, deadline)\` + signature. Router enforces the signature and the slippage.
+- **Aggregator integration.** Reuse Lab 7's code; select the best path before bundle creation.
+- **Private submission.** Sign the order tx → wrap in a Flashbots bundle → submit via \`mev_sendBundle\`. Front-runner can't see the order.
+- **Sponsored gas via EIP-7702.** Reuse Lab 5's sponsor code; the router pays gas, charges the user in stable coin.
+- **Test gate.** Forked anvil + mock Flashbots endpoint; assert the order executes at the best price; assert no front-run is possible (i.e., the order tx isn't in the public mempool before inclusion).
+- **Why this is the Capstone.** Combines 4 prior labs; produces a working production-shape artifact; transferable directly to building real perp / DEX / payment routers.
+
+## Worked example + steps
+
+# Capstone — Build a Frontrun-Resistant Order Router
+
 
 The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (Lesson 1, Lesson 4, Lesson 5, Lesson 7), one new piece: the decision layer.**
 
@@ -2839,7 +3008,6 @@ flowchart TB
     Wallet --> Chain
 \`\`\`
 
-> 🛑 **Predict before scrolling.** The MEV searcher in Lesson 1 is *the threat* this router defends against. **In one sentence**: what does that searcher do that this router needs to defeat? Hold your guess until Step 3.
 
 ## What lessons feed in (and what's new)
 
@@ -2997,7 +3165,6 @@ Walk:
 - **The heuristic is deliberately loose.** Real production decodes router ABIs and reasons about the swap *path*. Loose heuristics over-flag (false positives = users routed privately when they didn't need to be), which is the safe failure mode.
 - **\`duration\` is the look-ahead window.** ~2 seconds is a sensible default — long enough to catch a slow human, short enough not to delay the user noticeably.
 
-> 🛑 **Anti-fluency check.** Without scrolling: why does the **direction** of the candidate swap matter for whether it's a sandwich threat? Hint: think about what a frontrunner gains by trading the *same* direction as the victim vs. the *opposite* direction.
 
 ## Step 4: Score the threat with Revm simulation
 
@@ -3178,7 +3345,6 @@ The architecture you wrote — quote → detect adversaries → score with sim �
 
 After drill 5 you have a tuned, observably-correct frontrun-resistant router. **This is what you'd ship to production for a wallet team that takes user trust seriously.**
 
-> 🛑 **Final check (this lesson's final check).** In one sentence: of the lessons in this tier, why does the *capstone* depend on **simulation** (Lesson 1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
 
 ## Test gate
 
@@ -3237,18 +3403,41 @@ Still ahead: Lesson 9 (validate-revm cross-client harness) and Lesson 10 (HTTP 4
 Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
 
 > **🧭 Where you are now in the stack:** you've shipped the **networking + compiler + authentication layer integration** — multi-source input → simulation → routing decision → submission channel, with benign / threat / slippage E2E tests as the gate. Same shape as HFT order routers and CDN edge routers, applied to EVM transaction routing under MEV. Next lesson moves to the **VM layer's correctness verification**: differential testing Revm against production providers.
+
+## Summary (3 lines)
+
+- Capstone = aggregator (Lab 7) + MEV-resistant private submission (Lab 1) + sponsored execution (Lab 5) + tested invariants. ~800 lines of Rust.
+- User signs intent → router routes via aggregator → private Flashbots bundle → sponsored gas. Invariants tested via forked anvil + mock Flashbots.
+- Production-shape artifact, transferable to real perp / DEX / payment-rail routers. Next: validate revm against production provider.
 `,
                 },
                 {
-                  title: 'Validate Your Revm Simulation Against a Production Provider',
+                  title: 'Lab 9 — Validate Your Revm Simulation Against a Production Provider',
                   slug: 'build-validate-revm-en',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 50,
                   xpReward: 90,
-                  content: `# Validate Your Revm Simulation Against a Production Provider
+                  content: `# Lab 9 — Validate Your Revm Simulation Against a Production Provider
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's correctness verification** — specifically *differential testing* against a reference implementation. Same discipline that IEEE 754 floating-point conformance, TLS implementation interop, and POSIX certification all rely on: prove your implementation matches a trusted reference across a representative input set. This lesson is that practice applied to Revm vs production EVM clients.
+## Question
+
+Your revm simulation only matters if it matches the production chain. **Build a differential tester** — run the same tx through your revm simulation and against a production RPC; assert the results match.
+
+## Principle (minimum model)
+
+- **Differential testing setup.** For a candidate tx, simulate via revm (fork at block N) + simulate via \`eth_call\` at block N on a production RPC + assert outputs match.
+- **Why this matters.** Subtle bugs in your simulation (wrong opcode pricing / missing precompile / wrong system contract) only show up when you compare to production. The differential is the canonical detection.
+- **Helios as the reference.** Helios is a trustless Ethereum light client; its \`eth_call\` is your gold-standard reference because it verifies state proofs against the chain.
+- **Per-opcode trace diffing.** When outputs differ, dump the per-opcode trace from both sides; bisect to find the first divergent opcode. Reveals which opcode/precompile is wrong.
+- **Edge cases caught.** Storage-modification refunds + EIP-2929 access list + precompile rounding errors + chain-specific deposit transactions on L2s — all surface through the diff.
+- **Test gate.** Run the diff suite against 1000 random mainnet txs (sampled by block range); zero divergences = pass.
+- **Production use.** MEV searchers run this in CI to catch revm-version-bump regressions; rollup teams run it to validate their custom opcode tables.
+
+## Worked example + steps
+
+# Validate Your Revm Simulation Against a Production Provider
+
 
 Your arb bot's Revm fork says the swap nets 2.95 WETH. The chain — running mostly Geth and Nethermind, since Reth is still only ~7-12% of execution-client share — actually delivers 2.93. **The bot just lost money to a bug in your simulation.** Every Revm-based system you built in this tier has the same exposure: the MEV searcher in Lesson 1 predicts arbs on Revm, the aggregator in Lesson 7 quotes on Revm, the capstone in Lesson 8 scores frontrun risk on Revm. If Revm disagrees with the Geth/Nethermind majority that actually runs mainnet, every one of those systems silently ships wrong answers. ~200 lines below build the cross-check.
 
@@ -3279,7 +3468,6 @@ flowchart LR
     Diff --> Fail["❌ debug<br/>(hardfork? precompile?<br/>RPC caching?)"]
 \`\`\`
 
-> 🛑 **Predict before scrolling.** A custom Revm setup runs an opcode added by a non-mainnet hardfork (e.g., a chain still running Cancun rules while mainnet is Osaka). It computes a result that's **technically correct for the spec it's running** but disagrees with mainnet. Walk through how this disagreement would show up in your validation harness. Hold your guess.
 
 ## Cargo.toml
 
@@ -3453,7 +3641,6 @@ Walk:
 - **Gas comparison allows a spread** because \`eth_estimateGas\` includes a buffer (often 10-20%) that Revm's exact gas accounting won't add. Compare order of magnitude, not exact equality.
 - **\`println!\` instead of fancy reporting** is fine for the kernel. Production wrappers use \`tracing::error!\` + a structured diff so failures are queryable in logs.
 
-> 🛑 **Anti-fluency check.** Without scrolling: explain in one sentence why the **byte-level output comparison is exact** but the **gas comparison is approximate**. Hint: think about what \`eth_estimateGas\` is *supposed* to do beyond what \`evm.transact_one\` measures.
 
 ## Step 5: When they don't match — debug taxonomy
 
@@ -3494,7 +3681,6 @@ Build the kernel above, add the production-grade habits as your needs grow. Most
 
 Finish drill 5 and you have, structurally, the same continuous-validation discipline shipped at every serious Revm-based searcher / wallet / aggregator team. **The discipline is what separates "Revm code that works on my laptop" from "Revm code I trust in production."**
 
-> 🛑 **Final check.** In one sentence: why does building Lesson 1-Lesson 8 in this tier require **also** building this validation lesson? If your answer doesn't connect "Reth is ~7-12% of clients" to "your sim's correctness depends on agreeing with the 88-93% that aren't Reth," re-read the opening — that's the entire reason this lesson sits last in the tier.
 
 ## Test gate
 
@@ -3560,18 +3746,41 @@ Ten lessons covering everything from "I have an arbitrage idea" to "I can guaran
 Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
 
 > **🧭 Where you are now in the stack:** you've shipped the **compiler / VM layer's correctness verification** — differential trace comparison of your Revm fork against a production JSON-RPC provider, with gas + return-data parity and CREATE/CALL coverage as the gate. Same discipline as IEEE 754 conformance and TLS interop, applied to Revm. Every other app in this tier (Lesson 1, Lesson 7, Lesson 8) depends on this verification layer. Next lesson moves to the **networking layer's payment protocol** — HTTP 402 + MPP — as the monetization edge on top of the whole tier.
+
+## Summary (3 lines)
+
+- Differential tester = simulate via revm fork + simulate via production \`eth_call\` + assert outputs match. Helios as the trustless reference.
+- Per-opcode trace diff bisects divergences. Edge cases: storage refunds + EIP-2929 + precompile rounding + L2-specific deposits.
+- CI gate: 1000 random mainnet txs, zero divergences. Used by MEV searchers + rollup teams to catch regressions. Next: MPP payments.
 `,
                 },
                 {
-                  title: 'Machine payments — HTTP 402 and the Tempo MPP stack',
+                  title: 'Lab 10 — Machine payments: HTTP 402 and the Tempo MPP stack',
                   slug: 'build-mpp-payments-en',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Machine payments — HTTP 402 and the Tempo MPP stack
+                  content: `# Lab 10 — Machine payments: HTTP 402 and the Tempo MPP stack
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's payment protocol** — HTTP semantics extended with cryptographic settlement. Same pattern as TLS extending HTTP with crypto, OAuth extending HTTP with delegated auth, or rate-limit headers extending HTTP with cost signaling. MPP is "HTTP + per-request settlement," a protocol layer designed for autonomous agents that need pay-per-call without accounts or API keys.
+## Question
+
+**HTTP 402 was reserved for "Payment Required" since 1991** but never standardized. Tempo's MPP (Machine Payments Protocol) finally builds it out — AI agents pay for API calls per request. **Read the MPP stack** and understand where machine-to-machine payments are heading.
+
+## Principle (minimum model)
+
+- **HTTP 402 protocol.** Server returns \`402 Payment Required\` + a payment quote (price + receiver + expiry). Client retries with a signed payment proof in a header (\`X-Tempo-Payment: <sig>\`).
+- **Tempo MPP stack.** A Tempo L1 chain optimised for sub-cent transactions + an SDK for clients (Rust / TypeScript) + a middleware for servers (Express / Axum).
+- **Payment receipt.** A signed message proving "this user paid $X for endpoint Y at time T". Server verifies the signature on receipt; logs the receipt for audit.
+- **Settlement.** Receipts are batched and settled on-chain periodically. Off-chain receipts are fast (< 100 ms); on-chain settlement is hourly.
+- **Why agents need this.** AI agents call many APIs per task. Per-call subscription is impractical; per-call micropayments via 402 + MPP make agentic workflows economical.
+- **Adversarial considerations.** Replay protection (nonce in receipt) + amount caps + per-merchant signatures + server-side rate limiting.
+- **Why this is in the Building track.** Forecasts the next major surface area for the Rust EVM stack — machine-to-machine payments at scale.
+
+## Worked example + steps
+
+# Machine payments — HTTP 402 and the Tempo MPP stack
+
 
 Every paid API in 2026 forces the same dance. Sign up. Verify email. Provision an API key. Wire a billing account. Pre-commit to a plan. *Then* you can fetch one paid resource. For a human shipping a SaaS, fine. For an autonomous agent that needed *one* flight-status lookup *once*, the friction is the product — and the product is broken.
 
@@ -3621,7 +3830,6 @@ Five steps. Read the boundaries:
 
 The piece that earns the design its agnosticism: step 3 is *not in the HTTP roundtrip*. The protocol specifies the *handshake* (steps 1, 2, 4, 5) and delegates the *settlement* to whatever rail the challenge advertised. That separation is the whole game.
 
-> 🛑 **Predict before scrolling.** The \`WWW-Authenticate: Payment\` challenge format is extensible — any rail can plug in. Why is that the right choice, instead of baking in (say) Tempo specifically? Form a one-sentence answer about *what changes break if you fuse the protocol with one rail*. Hold your guess until the architecture section.
 
 ## Three layers — Core / Intents / Methods
 
@@ -3679,7 +3887,6 @@ let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
 
 ## Why Intents matter — the agent-at-scale problem
 
-> 🛑 **Predict.** An agent makes 1000 paid API requests per minute. What's broken about doing that as 1000 on-chain Tempo transactions? What does the protocol's *Intents* layer give you to fix it?
 
 (Answer: 1000 on-chain charges are slow, expensive in fees, and serialize the agent against block time. The Intents layer separates *charge* — settle each request individually — from *authorize* and *subscription* patterns — open a channel or session once, settle later. The wallet's "Session Payment (Channel)" mode below is exactly this — an on-chain channel opens once, off-chain vouchers settle per request, the channel closes when you're done. The Core layer doesn't know about channels. It knows about challenges and credentials. The Intents layer is where "1000 cheap requests per session" gets a name.)
 
@@ -3748,7 +3955,6 @@ If you stumbled on 2 or 4, re-read the Core/Intents/Methods section before the n
 
 Finish drill 3 and you have a paid endpoint deployable on real infrastructure. Finish drill 5 and you've internalized the protocol well enough to extend it.
 
-> 🛑 **Final check.** In one sentence: what does MPP give an agent that API keys + Stripe Checkout don't? If your answer doesn't mention *per-request settlement, no account, no rail lock-in*, re-read the opening — that's the entire reason the protocol exists.
 
 ## Test gate
 
@@ -3810,6 +4016,12 @@ async fn rejects_replayed_payment() {
 The lesson is **not complete** until all three pass against your endpoint running locally (with a forked Tempo testnet or anvil for the payment leg). A 402 endpoint that fails the replay test is a wallet-drainer waiting for someone to find your URL.
 
 > **🧭 Where you are now in the stack:** you've shipped the **networking-layer payment protocol** — HTTP 402 challenge, micropayment receipt, replay protection. Same abstraction pattern as TLS extending HTTP with crypto, applied to settlement. With this, the tier's 11 lessons are complete — every layer of the systems-engineering stack (networking, database, VM, authentication, concurrency) now has at least one application built end-to-end against it, with a test gate proving it works. **That's the tier's promise delivered.**
+
+## Summary (3 lines)
+
+- HTTP 402 + Tempo MPP = sub-cent micropayments per API call. AI agents pay for API calls per request → agentic workflows become economical.
+- Flow: server returns 402 + quote → client retries with signed payment → server verifies + logs receipt → batched on-chain settlement hourly.
+- Adversarial: nonce + amount cap + merchant signature + rate limiting. Forecasts the next major surface area for the Rust EVM stack. Building track complete.
 `,
                 },
               ],
@@ -3819,6 +4031,4 @@ The lesson is **not complete** until all three pass against your endpoint runnin
       },
     },
   });
-
-  console.log('  Building (EN) seeded');
 }
