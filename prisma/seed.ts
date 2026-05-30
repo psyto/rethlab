@@ -71,6 +71,7 @@ import { seedRethAdvancedV3JA } from './seed-reth-advanced-v3-ja';
 import { seedRethAlloyAdvancedV3JA } from './seed-reth-alloy-advanced-v3-ja';
 import { seedRethRevmAdvancedV3JA } from './seed-reth-revm-advanced-v3-ja';
 import { seedRethFoundryV3JA } from './seed-reth-foundry-v3-ja';
+import { seedRethPerpPrimerV3JA } from './seed-reth-perp-primer-v3-ja';
 import { seedRethFoundryEN } from './seed-reth-foundry-en';
 import { seedRethFoundryJA } from './seed-reth-foundry-ja';
 import { seedRethFoundryV2JA } from './seed-reth-foundry-v2-ja';
@@ -228,6 +229,7 @@ async function main() {
   await seedRethAlloyAdvancedV3JA(prisma);
   await seedRethRevmAdvancedV3JA(prisma);
   await seedRethFoundryV3JA(prisma);
+  await seedRethPerpPrimerV3JA(prisma);
   console.log('  Seeded Building OpenHL — ADL (EN + JA)');
   await seedRethFoundryEN(prisma);
   await seedRethFoundryJA(prisma);
