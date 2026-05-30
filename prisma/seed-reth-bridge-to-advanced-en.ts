@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
-  const tags = ['reth', 'revm', 'evm', 'rust', 'bridge'];
+  const tags = ['rust', 'evm', 'bridge', 'beginner-to-intermediate', 'reth'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-en',
       title: 'Reading the Stack — Bridge to Intermediate',
       description:
-        'You finished the Beginner-tier foundations in Rust and Alloy. But source-walking the Alloy/Revm/Inside Reth courses still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
+        'The bridge after Beginner (Reth Fundamentals / Reth 入門) and before the three Intermediate courses (Inside Revm / Inside Reth / Inside Alloy). Ten lessons: Solidity → bytecode translation, EVM\'s five memory regions, gas + call frames, blocks + receipts + reorgs, Solidity → Rust migration map, generics + trait bounds + ?Sized + dyn vs impl, Arc + Mutex + RwLock, unsafe Rust, macro_rules!, and finally a guide to how the source-reading courses work. By the end you have the vocabulary and the Rust minimum-set needed to read the Intermediate course sources.',
       difficulty: 'BEGINNER',
-      duration: 100,
-      xpReward: 200,
+      duration: 119,
+      xpReward: 245,
       track: 'reth-bridge-to-advanced',
       tags,
       isPublished: true,
@@ -26,15 +26,32 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'From Solidity to bytecode — the dispatch loop',
+                  title: 'Lesson 0 — From Solidity to bytecode — the dispatch loop',
                   slug: 'bytecode-dispatch-loop-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
-                  content: `# From Solidity to bytecode — the dispatch loop
+                  content: `# Lesson 0 — From Solidity to bytecode — the dispatch loop
 
-> 🧭 **Why this matters:** opens the **VM layer's dispatch loop** — the for-loop at the heart of every EVM execution. Inside REVM's custom-opcodes-table lesson later opens up this same loop's table-of-function-pointers design.
+## Question
+
+You've written Solidity and deployed via Foundry. **What does the EVM actually do after deployment?** Drop one level — down to bytes. This is the layer the Intermediate lessons silently assume; without it, the \`revm/crates/interpreter\` source is noise.
+
+## Principle (minimum model)
+
+- **Bytecode = a byte stream.** \`0x60 0x80 0x60 0x40 0x52 ...\` — each byte is either an opcode or a literal. EVM's flavour of x86 machine code.
+- **\`PUSH1 0x60\` and friends are literal-carrying opcodes.** Push a 1-byte literal; PC advances by 2 (PUSH32 advances by 33).
+- **PC (program counter) + the core loop.** \`loop { opcode = bytecode[pc]; handler = instruction_table[opcode]; handler(...); pc++; if halted break; }\` — three lines of pseudocode is the entire EVM.
+- **256-entry \`instruction_table\`.** One slot per byte value 0x00–0xFF, each slot is a function pointer to an opcode handler. O(1) dispatch.
+- **Halting opcodes.** STOP / RETURN / REVERT / INVALID / Out-Of-Gas — all break the loop, with different outcomes (success / failure / state revert).
+- **JUMP / JUMPI set PC arbitrarily.** Solidity \`if\` / \`for\` / function calls compile down to JUMPs. The PC is the control flow.
+- **Solidity ABI + function selector.** The first 4 bytes of calldata are the selector (\`keccak256(signature)[..4]\`); contract dispatch routes to the right function by selector.
+
+## Worked example + steps
+
+# From Solidity to bytecode — the dispatch loop
+
 
 You've written Solidity. You've used Foundry to deploy and test. But what does the EVM **actually do** with your contract once it's deployed? This lesson takes you down one layer — to the bytes.
 
@@ -199,18 +216,41 @@ When you start Intermediate, the first lesson opens with the *exact* \`add\` fun
 \`\`\`youtube
 RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
 \`\`\`
+
+## Summary (3 lines)
+
+- EVM core loop = \`loop { fetch → table lookup → handler → pc++ }\` — three lines of pseudocode, 256-entry function-pointer table, O(1) dispatch.
+- \`PUSH*\` opcodes advance PC by a variable amount; JUMP/JUMPI set PC arbitrarily; halt opcodes terminate the loop with different outcomes.
+- Next lesson: memory, storage, and the world state — the five memory regions the bytecode actually touches.
 `,
                 },
                 {
-                  title: 'Memory, storage, and the world state',
+                  title: 'Lesson 1 — Memory, storage, and the world state',
                   slug: 'memory-storage-world-state-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Memory, storage, and the world state
+                  content: `# Lesson 1 — Memory, storage, and the world state
 
-> 🧭 **Why this matters:** introduces the **VM ↔ DB seam** — call-frame memory, contract storage, world state — that Inside REVM's \`Database\` trait later abstracts. Get the three storage tiers loaded before you read the trait.
+## Question
+
+The EVM bytecode touches **five memory regions**. Stack / Memory / Calldata / Storage / Code. Each has different lifetime, cost, and capacity. **Which is persisted, which is volatile, which is read-only, and what is the world state?**
+
+## Principle (minimum model)
+
+- **Stack.** 1024 slots, volatile (one transaction), cheapest (3 gas / push). The current computation.
+- **Memory.** Linear array, volatile, read/write via \`MSTORE\` / \`MLOAD\`. Expansion costs gas (quadratic for large allocations).
+- **Calldata.** Read-only transaction input, set only on external calls. \`CALLDATALOAD\` / \`CALLDATASIZE\`. Cheapest.
+- **Storage.** **The only persisted region.** Per-contract, \`SLOAD\` 2100 gas (cold) / 100 gas (warm), \`SSTORE\` 20K gas (new slot) / 5K (change). Most expensive.
+- **Code.** The contract's deployed bytecode, read-only. \`EXTCODECOPY\` / \`CODECOPY\`.
+- **World state.** The combined storage of every contract plus every EOA's balance. Maintained in a Merkle Patricia Trie; the state root sits in the block header.
+- **MPT (Merkle Patricia Trie).** Ethereum's state persistence structure. Three node types (Branch / Extension / Leaf) + keccak256 root hash. The state root is what L1 sync builds.
+
+## Worked example + steps
+
+# Memory, storage, and the world state
+
 
 The dispatch loop showed you what an opcode *is*. Most opcodes touch one of four stores. This lesson walks through them — and through the world-state model that Solidity hides from you but Intermediate lessons assume you know.
 
@@ -356,18 +396,43 @@ Five layers between your line of Solidity and the chain's state root. **All five
 - **The world state** is a \`Address → Account\` map; each Account points to its own storage trie.
 - The Revm \`Database\` trait's three core methods (\`basic\`, \`code_by_hash\`, \`storage\`) **directly mirror** the world-state model above.
 
-When Intermediate lesson 3 shows you the \`Database\` trait, you'll recognize it as exactly this picture, expressed as Rust traits.`,
+When Intermediate lesson 3 shows you the \`Database\` trait, you'll recognize it as exactly this picture, expressed as Rust traits.
+
+## Summary (3 lines)
+
+- Five memory regions: Stack 1024 slots volatile / Memory volatile quadratic / Calldata read-only input / Storage persisted most-expensive / Code read-only bytecode.
+- Only Storage is persisted. The world state = every contract's Storage + every EOA's balance, maintained in a Merkle Patricia Trie; the state root sits in the block header.
+- Next lesson: gas mechanics + call frames — the cost model and contract-to-contract calling conventions.
+`,
                 },
                 {
-                  title: 'Gas accounting in depth, and call frames',
+                  title: 'Lesson 2 — Gas accounting in depth, and call frames',
                   slug: 'gas-call-frames-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Gas accounting in depth, and call frames
+                  content: `# Lesson 2 — Gas accounting in depth, and call frames
 
-> 🧭 **Why this matters:** introduces the **VM's metering model** — gas, call frames, reverts. Same shape as a CPU's instruction-count budget + nested function frames, restricted for adversarial execution.
+## Question
+
+The EVM measures and charges every operation in **gas**. A tx has a gas limit; exceed it and execution halts. When a contract calls another contract (CALL / DELEGATECALL / STATICCALL), a **call frame** is pushed. **Understand the cost model and the parent-child frame relationship.**
+
+## Principle (minimum model)
+
+- **Intrinsic gas.** The flat tx cost (21K base + 4/16 gas per calldata byte) + access-list pre-purchase. Charged before bytecode runs.
+- **Per-opcode gas.** Each opcode has a fixed or dynamic cost. ADD = 3, SLOAD cold = 2100, SSTORE new = 20K. EIP-2929 introduced the cold/warm distinction.
+- **EIP-2929 cold/warm.** First access to a slot = cold (2100 gas); subsequent = warm (100 gas). Reflects the actual cost of state access.
+- **Gas refunds.** Resetting an SSTORE slot to 0 earns a refund. Capped at 1/5 of gas_used at tx end.
+- **Call frames.** CALL / DELEGATECALL / STATICCALL push a new frame. Parent passes gas to child (63/64 rule). Child's return value lands on parent's stack.
+- **CALL vs DELEGATECALL vs STATICCALL.** CALL = new context (msg.sender changes); DELEGATECALL = same context (library pattern, used by proxies); STATICCALL = read-only (state changes forbidden).
+- **Out-of-gas in a child frame.** Child REVERTs; parent continues (its CALL returns 0 = failure).
+- **msg.sender vs tx.origin.** msg.sender = the immediate caller (per frame); tx.origin = the EOA that started the tx (constant throughout). Often the basis of security bugs.
+
+## Worked example + steps
+
+# Gas accounting in depth, and call frames
+
 
 You know "gas costs money." This lesson goes one level deeper — into where gas actually goes, and how a single transaction can trigger a tree of nested **call frames** with separate context.
 
@@ -520,7 +585,14 @@ Every frame has its own memory/stack. Returndata flows back up at each return. G
 - A tx is a **tree of call frames**, each with its own stack/memory/PC/gas.
 - **DELEGATECALL** is the call style that runs the callee's code in the caller's context — the foundation of proxy patterns and the source of many bugs.
 
-When Intermediate lesson 5 (custom precompiles) talks about the gas pricing model, or lesson 6 (ExEx) talks about reorganizing across multiple committed transactions, you'll have the call-frame and gas model in your head — not as abstract concepts, but as concrete machinery.`,
+When Intermediate lesson 5 (custom precompiles) talks about the gas pricing model, or lesson 6 (ExEx) talks about reorganizing across multiple committed transactions, you'll have the call-frame and gas model in your head — not as abstract concepts, but as concrete machinery.
+
+## Summary (3 lines)
+
+- Gas = intrinsic (21K + calldata) + per-opcode (cold/warm) + refunds (capped at gas_used/5). Charged before and during execution.
+- Call frames: CALL / DELEGATECALL / STATICCALL push frames; 63/64 rule for gas to child; CALL = new context, DELEGATECALL = same context (library), STATICCALL = read-only.
+- msg.sender = per-frame; tx.origin = per-tx EOA. Out-of-gas in child reverts only the child. Next module: block-level Ethereum (blocks, receipts, reorgs).
+`,
                 },
               ],
             },
@@ -531,15 +603,33 @@ When Intermediate lesson 5 (custom precompiles) talks about the gas pricing mode
             lessons: {
               create: [
                 {
-                  title: 'Blocks, receipts, and reorgs',
+                  title: 'Lesson 3 — Blocks, receipts, and reorgs',
                   slug: 'blocks-receipts-reorgs-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Blocks, receipts, and reorgs
+                  content: `# Lesson 3 — Blocks, receipts, and reorgs
 
-> 🧭 **Why this matters:** introduces the **distributed-systems layer** — blocks, receipts, reorgs. Same shape as database WAL + replication + conflict resolution, expressed through consensus. The ExEx / staged-sync lessons later all assume this model.
+## Question
+
+You've seen tx internals. **One layer up = blocks.** A block is a sequence of txs + header + receipts + state root. **Reorgs** are how recently-mined blocks get discarded and replaced — the biggest source of complexity in L1 sync code.
+
+## Principle (minimum model)
+
+- **Block structure.** Header (parent hash + state root + receipts root + timestamp + number + gas used + gas limit + ...) + Body (tx list + uncles) + Receipts (tx results).
+- **State root.** The MPT root hash of every contract's Storage + every EOA's balance. Changes before/after block execution; validators verify independently.
+- **Receipts root.** The MPT root of every tx's result (status / gas used / logs / events). Makes tx results provable.
+- **Reorg = swap-out of a shallowly-confirmed block.** PoS allows reorgs roughly within 2–3 blocks; \`finalized\` blocks (≈12 minutes) are irreversible.
+- **Reorg behaviour.** Undo old-chain txs → re-execute new-chain txs. Subscribers get a \`ChainReorged\` event. The state DB must hold both views temporarily.
+- **Three finality levels.** \`latest\` (unconfirmed) / \`safe\` (~32 blocks back, likely-final) / \`finalized\` (irreversible, ~12 minutes). Pick the right level for the use case.
+- **Block-level data exposed to txs.** \`block.number\` / \`block.timestamp\` / \`block.coinbase\` / \`block.basefee\` — read by EVM during execution.
+- **Reth's reorg handling.** ExEx (Execution Extension) emits three variants (Committed / ChainReorged / Reverted); indexers must handle all three.
+
+## Worked example + steps
+
+# Blocks, receipts, and reorgs
+
 
 You've worked with one transaction at a time. The chain operates at a different level: **blocks** of transactions, **receipts** of what they did, and the occasional **reorg** when the chain rewrites recent history.
 
@@ -681,7 +771,14 @@ This is a design choice you'll appreciate in Intermediate lesson 4 (Staged Sync 
 - **Reorgs** rewrite recent history; off-chain consumers must handle the rewind explicitly.
 - Reth's Staged Sync is **symmetric** (execute / unwind) precisely because reorgs are normal, not exceptional.
 
-When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks through ExEx notification types, you'll already have the model in your head. You'll just be reading the Rust that implements it.`,
+When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks through ExEx notification types, you'll already have the model in your head. You'll just be reading the Rust that implements it.
+
+## Summary (3 lines)
+
+- Block = Header + Body (tx list) + Receipts. State root + receipts root are MPT roots in the header; validators verify independently.
+- Reorgs swap out shallowly-confirmed blocks; PoS allows within ~2–3 blocks; finalized (~12 minutes) is irreversible. Reth ExEx emits three variants (Committed / ChainReorged / Reverted).
+- Three finality levels (latest / safe / finalized). Indexers must handle reorgs. Next module: Rust for source-reading — the migration map from Solidity.
+`,
                 },
               ],
             },
@@ -692,15 +789,35 @@ When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks thro
             lessons: {
               create: [
                 {
-                  title: 'Rust for Solidity engineers — the migration map',
+                  title: 'Lesson 4 — Rust for Solidity engineers — the migration map',
                   slug: 'rust-for-solidity-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 35,
-                  content: `# Rust for Solidity engineers — the migration map
+                  content: `# Lesson 4 — Rust for Solidity engineers — the migration map
 
-> 🧭 **Why this matters:** maps Solidity intuition onto Rust idioms — the conceptual transition every Solidity engineer building tooling has to make. Cheaper to do here than mid-Inside-tier.
+## Question
+
+A Solidity engineer reading Rust source (Reth / Revm / Alloy) needs a **migration map**. Concepts that map 1:1, concepts that don't, and gotchas. **Where Solidity experience pays off and where the mental model needs to switch.**
+
+## Principle (minimum model)
+
+- **Type system.** Solidity \`uint256\` → Rust \`U256\` (256-bit) / \`address\` → \`Address\` (20 bytes) / \`bytes32\` → \`B256\`. Alloy primitives are 1:1.
+- **Ownership = memory management.** Solidity is auto-managed by the EVM; Rust uses compile-time ownership + borrowing → no GC + no double-free + no data races.
+- **Solidity state variable = Rust struct field.** \`contract C { uint x; }\` → \`struct C { x: U256 }\`. Methods sit in \`impl C { fn ... }\`.
+- **Solidity \`function\` = Rust \`fn\`.** \`function add(uint a, uint b) public returns (uint)\` → \`fn add(&self, a: U256, b: U256) -> U256\`. Solidity \`view\` / \`pure\` are implicit in Rust (via \`&self\` / no argument).
+- **Solidity \`msg.sender\` = an explicit argument in Rust.** Solidity gets it from the EVM; Rust passes it as a function argument or context struct. Not implicit.
+- **Solidity event = Rust \`Event\` struct + emit.** Alloy's \`sol!\` macro turns Solidity ABI into type-safe Rust types; emit is type-checked.
+- **Solidity \`require\` / \`revert\` = Rust \`Result<T, E>\`.** \`require(cond, "msg")\` → \`if !cond { return Err(...) }\`. \`?\` propagates.
+- **Solidity mapping = Rust \`HashMap\`.** \`mapping(address => uint)\` → \`HashMap<Address, U256>\`. Rust requires key and value types explicitly.
+- **Solidity inheritance = Rust trait composition.** \`contract A is B, C\` → \`impl Trait1 + Trait2 for Struct\`. Rust uses traits for mixin.
+- **Rust \`async\` has no Solidity equivalent.** Solidity is synchronous; Rust uses async/await + Future. Alloy / Reth's RPC is fully async.
+
+## Worked example + steps
+
+# Rust for Solidity engineers — the migration map
+
 
 If you've shipped Solidity, you already know everything you need to *care* about EVM behaviour. What's missing is **the Rust mental model that lets you read the engine that runs your contracts**. This lesson is the side-by-side translation table that closes the gap before the dense Rust lessons below.
 
@@ -888,18 +1005,42 @@ The next four lessons go through generics, shared ownership, unsafe, and macros 
 3. **Compare error handling.** Take a Solidity function with two \`require\` statements. Sketch the Rust equivalent using \`Result\` and a custom error enum with two variants. Note how the *types* now document every failure mode. 45 minutes.
 
 After this lesson, the dense Rust below — generics, Arc, unsafe, macros — reads as additional vocabulary on top of a model you already have. **You're not learning Rust from zero; you're learning the Rust idioms that translate Solidity intuition into engine-layer code.**
+
+## Summary (3 lines)
+
+- Type system maps 1:1 (U256 / Address / B256). State variables → struct fields. Functions → \`fn\`. msg.sender → explicit arg. require → Result<T, E>.
+- Mapping → HashMap. Inheritance → trait composition. Events → \`sol!\` macro + emit. Rust is fully async (Solidity is synchronous).
+- Ownership + borrowing is the new concept (the first wall). Type system + control flow + gas awareness all carry over. Next lesson: generics + trait bounds.
 `,
                 },
                 {
-                  title: 'Generics, trait bounds, ?Sized, dyn vs impl',
+                  title: 'Lesson 5 — Generics, trait bounds, ?Sized, dyn vs impl',
                   slug: 'rust-generics-traits-bounds-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
-                  content: `# Generics, trait bounds, ?Sized, dyn vs impl
+                  content: `# Lesson 5 — Generics, trait bounds, ?Sized, dyn vs impl
 
-> 🧭 **Why this matters:** the abstraction toolkit (generics + trait bounds + \`?Sized\` + \`dyn\` vs \`impl\`) is exactly what alloy uses to make \`Provider\` work across chains, and what Revm uses to make \`Database\` work across backends. Loading this here turns the Inside tier from "magic" into "pattern."
+## Question
+
+Reading Reth / Revm / Alloy source means constantly encountering **generics + trait bounds**. \`<T: Bound>\` / \`?Sized\` / \`dyn Trait\` / \`impl Trait\` — what does each mean and when to use which? **Four concepts that are mandatory for reading the source.**
+
+## Principle (minimum model)
+
+- **Generics \`<T>\`.** Type parameters; the compiler monomorphises them to concrete types at compile time → no runtime overhead but one binary copy per concrete type.
+- **Trait bounds \`T: Trait\`.** Constraints on a type parameter. \`fn print<T: Display>(x: T)\` = "anything that implements Display". Multiple bounds: \`T: A + B + 'static\`.
+- **\`?Sized\`.** Removes the default \`Sized\` bound. Required to accept \`dyn Trait\` (whose size is only known at runtime). \`<T: ?Sized>\` lets you pass trait objects.
+- **\`dyn Trait\`.** Runtime dispatch via vtable. \`Box<dyn Trait>\` / \`&dyn Trait\`. Multiple concrete types treated uniformly. Size unknown at compile time.
+- **\`impl Trait\`.** As an argument = "something that implements Trait" (a shorthand for generics). As a return type = "some concrete type that's hidden". Argument-position is sugar; return-position is single concrete type.
+- **Generics vs \`dyn\`.** Generics = static dispatch + monomorphisation (fast, binary bloat); \`dyn\` = dynamic dispatch + vtable (flexible, slightly slower).
+- **\`Send + Sync\`.** Marker traits for thread-safe movability/shareability. Tokio tasks require \`T: Send + 'static\`. The foundation of Rust concurrency.
+- **\`'static\` lifetime.** Lives for the whole program OR no borrowing at all. Global constants / \`String::from("...")\` / \`Vec<T>\` are \`'static\`. \`Send + 'static\` = movable across tasks.
+
+## Worked example + steps
+
+# Generics, trait bounds, ?Sized, dyn vs impl
+
 
 This is the lesson that lets you read \`pub fn add<IT: ITy, H: ?Sized>(...)\` without flinching. Reth and Revm source code is **dense with generics** — function signatures with three type parameters and trait bounds aren't unusual. This lesson goes through every piece of that machinery.
 
@@ -1090,18 +1231,43 @@ This is **why Revm is "modular":** the same opcode function compiles into multip
 - **\`dyn Trait\`** is a runtime-dispatched pointer-plus-vtable; **\`impl Trait\`** is compile-time monomorphized.
 - Revm's heavy use of generics is **modularity at the type level** — same code, multiple specializations.
 
-When Intermediate lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.`,
+When Intermediate lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.
+
+## Summary (3 lines)
+
+- Four concepts: generics \`<T>\` (compile-time concretisation) + trait bounds \`T: Bound\` (constraints) + \`?Sized\` (allows trait objects) + \`dyn\` / \`impl Trait\` (runtime vs static).
+- \`Send + Sync + 'static\` enable cross-thread move/share/lifetime → the substrate of Tokio tasks.
+- Next lesson: Arc / Mutex / RwLock — the shared-ownership primitives for concurrent code.
+`,
                 },
                 {
-                  title: 'Shared ownership: Arc, Mutex, RwLock',
+                  title: 'Lesson 6 — Shared ownership: Arc, Mutex, RwLock',
                   slug: 'rust-shared-ownership-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Shared ownership: Arc, Mutex, RwLock
+                  content: `# Lesson 6 — Shared ownership: Arc, Mutex, RwLock
 
-> 🧭 **Why this matters:** \`Arc\` / \`Mutex\` / channels are how Reth's pipeline shares state across Tokio tasks, and how Inside REVM's \`Database\` design lets multiple consumers share a backend. The shared-ownership toolkit underlies every concurrency-shaped piece of the stack.
+## Question
+
+Rust ownership = "one owner". **When you need to share across threads**, you need \`Arc\` (reference counting) + \`Mutex\` / \`RwLock\` (exclusion). **Three primitives that appear constantly in concurrent code.**
+
+## Principle (minimum model)
+
+- **\`Rc<T>\`.** Reference-counted, single-thread only. \`Rc::clone\` bumps the counter; the last drop frees. \`!Send\` / \`!Sync\`.
+- **\`Arc<T>\`.** Atomic reference-counted, cross-thread. The \`Send + Sync\` version of \`Rc\`. Constant fixture in Tokio code.
+- **\`Mutex<T>\`.** Mutual exclusion. \`.lock()\` returns a \`MutexGuard\`; drop releases. Beware deadlocks. Sync version (\`std::sync::Mutex\`) vs async (\`tokio::sync::Mutex\`).
+- **\`RwLock<T>\`.** Read-write split. \`.read()\` allows many; \`.write()\` is exclusive. Wins when reads dominate. Sync vs async variants.
+- **\`Arc<Mutex<T>>\`.** The most common pattern. Share T across threads with exclusive write. \`let shared = Arc::new(Mutex::new(value));\` then \`shared.clone()\` to a thread.
+- **Atomic primitives.** \`AtomicUsize\` / \`AtomicBool\` etc. Lock-free read-modify-write; \`Ordering\` controls memory ordering. Lightest weight.
+- **\`Cell<T>\` / \`RefCell<T>\`.** Interior mutability. Mutate behind \`&self\`. \`Cell\` only for Copy types; \`RefCell\` does runtime borrow-check. Single-thread only.
+- **\`tokio::sync::*\`.** Async versions of Mutex / RwLock / oneshot / mpsc — \`.await\` to wait. Use in async tasks. Holding \`std::sync::Mutex\` across \`.await\` is a classic deadlock.
+
+## Worked example + steps
+
+# Shared ownership: Arc, Mutex, RwLock
+
 
 Rust's "one owner" rule is sharp — and helpful 90% of the time. The other 10%, you need **multiple parts of the program to hold the same value**, possibly across threads, possibly with mutation. That's what this lesson is about.
 
@@ -1326,16 +1492,42 @@ When you read Reth source and see \`Arc<RwLock<Foo>>\` next to \`Arc<Mutex<Bar>>
 - **\`tokio::sync::Mutex\`** is the async-aware version — use when the critical section spans \`.await\`.
 - **\`Arc<Mutex<T>>\`** is the canonical "shared mutable state" pattern — you'll see it everywhere in Reth/ExEx.
 
-When Intermediate lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.`,
+When Intermediate lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.
+
+## Summary (3 lines)
+
+- \`Arc<T>\` for cross-thread sharing; \`Mutex\` / \`RwLock\` for exclusion. \`Arc<Mutex<T>>\` is the canonical pattern. Atomics are lock-free for simple cases.
+- Interior mutability: \`Cell\` / \`RefCell\` (single-thread) / \`Mutex\` / \`RwLock\` (multi-thread). Mutate behind \`&self\`.
+- Use \`tokio::sync::*\` in async code. Holding \`std::sync::Mutex\` across \`.await\` = deadlock. Next lesson: unsafe Rust.
+`,
                 },
                 {
-                  title: 'unsafe Rust',
+                  title: 'Lesson 7 — unsafe Rust',
                   slug: 'rust-unsafe-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 10,
                   xpReward: 20,
-                  content: `# unsafe Rust
+                  content: `# Lesson 7 — unsafe Rust
+
+## Question
+
+**\`unsafe\` blocks temporarily remove Rust's safety guarantees.** Normally you avoid them. But Reth / Revm hotpaths use \`unsafe\` for performance. **When, why is it safe, and how do you read it?**
+
+## Principle (minimum model)
+
+- **Five things \`unsafe\` enables.** (1) Dereferencing a raw pointer. (2) Mutating a static. (3) Calling an \`unsafe fn\`. (4) Implementing an \`unsafe trait\`. (5) Accessing union fields.
+- **What Rust's safety guarantees are.** Memory safety + no data races + no undefined behaviour, all enforced at compile time via ownership / borrowing / lifetimes. \`unsafe\` removes that.
+- **The contract pattern.** Inside an \`unsafe\` block, encode "an invariant I checked myself" and trust the compiler to honour it. Break the contract → instant UB.
+- **\`unwrap_unchecked()\`.** The \`unsafe\` variant of \`Option::unwrap\`. UB if \`None\`, but skips the runtime check. Hotpath speedup when you can prove \`Some\` ahead of time.
+- **Revm's \`popn_top!\` macro.** Guards with \`if stack.len() < N { return Err }\` first, then \`unwrap_unchecked\` to skip the runtime \`Some\` check. The guard proves the invariant.
+- **\`unsafe fn\` is the advertised version.** The function itself is unsafe — the caller is responsible for the contract. \`pub unsafe fn\` puts the contract in the doc comment.
+- **Soundness.** Unsafe code is *sound* when it cannot cause UB on any input. Violating soundness = anyone can hit UB with valid input → a real bug.
+- **How to read it.** When you see \`unsafe\`, ask "why is this needed?" and "what invariant is assumed?" Read the surrounding comments / docs — they explain the contract.
+
+## Worked example + steps
+
+# unsafe Rust
 
 One of two areas where the standard Rust book is *thin*, and where Revm's interpreter goes *deep*. This lesson gives you enough vocabulary to read Revm's hot path without flinching at \`unsafe { ... }\` blocks. (The other area — \`macro_rules!\` — is the next lesson; together they're what you need to read \`popn_top!\` and friends.)
 
@@ -1422,16 +1614,42 @@ For reading Revm/Reth source, **the patterns above (manual safety verification +
 - **\`unwrap_unchecked()\`** + a preceding length/state check is the canonical Revm pattern for skipping redundant runtime checks on the hot path
 - The **\`// SAFETY:\` comment** discipline — every \`unsafe\` block in well-written Rust documents the invariant that justifies it
 
-The next lesson covers \`macro_rules!\`, the other half of what you need to read Revm's interpreter source.`,
+The next lesson covers \`macro_rules!\`, the other half of what you need to read Revm's interpreter source.
+
+## Summary (3 lines)
+
+- \`unsafe\` enables five operations while removing Rust's safety guarantees. The contract pattern encodes a manually-verified invariant for the compiler.
+- Revm's \`popn_top!\` uses \`unwrap_unchecked\` after a guard proves the invariant — the guard is the contract.
+- Read \`unsafe\` by asking "why" and "what invariant" — the comments explain. \`unsafe\` is a last resort; soundness is the bar. Next lesson: \`macro_rules!\` basics.
+`,
                 },
                 {
-                  title: 'macro_rules! basics',
+                  title: 'Lesson 8 — `macro_rules!` basics',
                   slug: 'rust-macros-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 10,
                   xpReward: 20,
-                  content: `# macro_rules! basics
+                  content: `# Lesson 8 — \`macro_rules!\` basics
+
+## Question
+
+Rust **macros** = \`!\` calls like \`println!\` / \`vec!\` / \`format!\`. Compile-time code expansion; more flexible than functions. Reth / Revm source uses \`popn_top!\` / \`gas!\` etc constantly. **How to read \`macro_rules!\`.**
+
+## Principle (minimum model)
+
+- **Macro = compile-time code expansion.** Expands to AST at the call site; more flexible than a function (variable arity / arbitrary syntax); trade-off is debuggability.
+- **\`macro_rules!\` syntax.** \`macro_rules! name { ($x:expr) => { ... } }\` — pattern → expansion rules. Fragment specifiers: \`expr\` / \`ident\` / \`ty\` / \`pat\` / \`stmt\` ...
+- **Variable arity.** \`$($x:expr),*\` matches a comma-separated list; \`$( ... )*\` expands once per element. Implements variadic args like \`println!("{} {}", a, b)\`.
+- **Hygiene.** Variables defined inside a macro don't leak into the surrounding scope. Safe abstraction.
+- **Revm's \`popn_top!\`.** Combines stack pop + underflow pre-check + \`unwrap_unchecked\` into one macro. Reused across 30+ binary opcodes (add / mul / sub / ...).
+- **\`gas!\` macro.** Combines gas charging + cold_path hint + early return. 5-line; eliminates hotpath boilerplate.
+- **Procedural macros (proc-macro).** \`#[derive(...)]\` / \`#[tokio::main]\` / \`sol!\` etc. More powerful than \`macro_rules!\`; implemented as Rust functions. Deep-dive is in Expert.
+- **Reading a macro.** \`cargo expand\` shows the expanded code; reading the expansion is the right approach. \`macro_rules!\` syntax itself is just practice.
+
+## Worked example + steps
+
+# macro_rules! basics
 
 The other of two areas where the standard Rust book is *thin*. The previous lesson covered \`unsafe\`; this one covers \`macro_rules!\`. Together they're what you need to read Revm's hot-path source — \`popn_top!\`, \`gas!\`, and the rest.
 
@@ -1624,18 +1842,43 @@ If those three sentences fit, the technical prereqs are absorbed.
 
 The Intermediate tier is **three independent courses** (Revm, Reth, Alloy), and they all share the same editorial style — Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape. Read **"How Intermediate courses work"** next; it's the meta-orientation that applies to all three Intermediate courses, so you only read it once.
 
-After that, pick a course and start.`,
+After that, pick a course and start.
+
+## Summary (3 lines)
+
+- \`macro_rules!\` = compile-time code expansion. Variable arity + hygiene + fragment specifiers (expr / ident / ty ...). More flexible than functions.
+- Revm's \`popn_top!\` and \`gas!\` collapse hotpath boilerplate across 30+ opcodes.
+- Use \`cargo expand\` to read the expanded code. Procedural macros (\`#[derive]\` / \`sol!\` etc) are deeper — Expert covers them. Next lesson: how the source-reading courses work.
+`,
                 },
                 {
-                  title: 'How the source-reading courses work',
+                  title: 'Lesson 9 — How the source-reading courses work',
                   slug: 'advanced-tier-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 6,
                   xpReward: 15,
-                  content: `# How the source-reading courses work
+                  content: `# Lesson 9 — How the source-reading courses work
 
-> 🧭 **Why this matters:** the gate into the Intermediate tier — sets the contract for what "reading the Rust EVM stack at the source level" actually demands. Use this to calibrate how much depth Inside Alloy / REVM / Reth will ask for.
+## Question
+
+Finishing Bridge to Advanced = ready for the three Intermediate courses (Inside Revm / Inside Reth / Inside Alloy). **How do those courses work?** Editorial style / quiz gates / buildup → walkthrough → quiz → drill chain structure + pacing.
+
+## Principle (minimum model)
+
+- **Three Intermediate courses.** Inside Revm (EVM execution engine) / Inside Reth (Staged Sync + ExEx + SDK) / Inside Alloy (Provider + Network + Signer). Take in any order; the recommended order is Alloy → Revm → Reth.
+- **Chain structure.** Each topic = buildup (naive version → real version, in steps) → walkthrough (real source line-by-line) → quiz (progress gate) → drill (hands-on proof you did the work).
+- **Predict prompts + quiz gates.** "Stop here and predict" appears throughout. Quizzes gate progress — get 2+ wrong → re-read the previous lesson. The structure forces you out of "I read it and nodded" mode.
+- **Pacing.** 30–40 minutes per lesson. Realistic: 1–2 lessons + a drill per day; weekend Capstones take half a day.
+- **Setup is mandatory.** \`git clone bluealloy/revm\` / \`git clone paradigmxyz/reth\` / \`cargo install cargo-expand\` / second monitor or split terminal. Without these, drills cannot be done.
+- **Reading mental model.** Read trait headers first → main struct → function bodies. \`grep\` / \`rg\` for related sites. \`cargo doc --open\` for API docs.
+- **When you get stuck.** Mark the unclear part, keep reading, return later. Ask on Discord / GitHub. Spend 30 minutes on your own before looking at the answer.
+- **After completion.** Advanced / Expert for production engineering. Foundry for the Solidity side. openhl DIY Perp for building one full thing. Many directions open up.
+
+## Worked example + steps
+
+# How the source-reading courses work
+
 
 You're at the doorstep of the **Intermediate tier** — three independent courses (**Inside Revm**, **Inside Reth**, **Inside Alloy**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever course you start with.
 
@@ -1711,7 +1954,14 @@ After the Intermediate source-reading courses, the **Advanced tier** waits (5 co
 
 Each chain runs 1.5–3× the length of an Intermediate source-reading chain. **Don't worry about it now** — finish a single source-reading chain first. Keep the Advanced tier as a distant destination on the map and nothing more.
 
-You're ready.`,
+You're ready.
+
+## Summary (3 lines)
+
+- Three Intermediate courses (Revm / Reth / Alloy), each as buildup → walkthrough → quiz → drill. Predict prompts + quiz gates prevent passive reading.
+- Setup is mandatory (revm + reth clones + cargo-expand + two screens). Pacing: 1–2 lessons + drill per day; weekend Capstones half a day.
+- After completion: Advanced + Expert + Foundry + openhl DIY Perp. Bridge to Advanced complete; the source-reading toolkit is ready.
+`,
                 },
               ],
             },
