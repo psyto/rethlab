@@ -516,7 +516,55 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                   content: `# クイズ — Provider
 
 \`Provider\` トレイトの \`N: Network = Ethereum\` デフォルト、\`auto_impl(5 種)\`、\`root()\` 間接化、3 戻り値型（\`ProviderCall\` / \`RpcWithBlock\` / \`EthCall\`）、\`FillProvider\` 層状合成を確認する。
+
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Provider\` のステップに戻ること。
 `,
+                  quizQuestions: [
+                    {
+                      question: "`Provider` には `auto_impl(&, &mut, Box, Rc, Arc)`（5 種のラッパー）があり、Revm の `Database` には `auto_impl(&mut, Box)`（2 種のラッパー）しかない。この非対称を生んでいる、2 トレイト間の決定的な構造上の違いはなにか?",
+                      options: [
+                        "`Database` のほうが古く、auto_impl のリストは新しいラッパーが追加されるたびに少しずつ育ったから。",
+                        "`Provider` は `Send + Sync` を要求するが `Database` は要求しない。そのぶん多くのラッパー型が有効になる。",
+                        "`Provider` のメソッドは `&self` を取る（キャッシュは実装内の内部可変性に任せる）。`Database` のメソッドは `&mut self` を取り、実装がキャッシュをその場で書き換えられる — ただし `&mut self` は `&`/`Rc`/`Arc` を排除する。これらは `&T` しか取り出せないからだ。",
+                        "auto_impl クレートは、失敗しうる操作を含むトレイトの `Rc`/`Arc` をサポートしないから。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "ラッパー互換性を決めているのはレシーバ型。`&mut self` は `&`/`Rc`/`Arc` を排除する — これらは `&T` しか取り出せないからだ。`&self` ならすべてのラッパーで動く — どれも `&T` は取り出せるから。どちらの設計も妥当 — その場キャッシュ（Database の選択）と共有並行アクセス（Provider の選択）のあいだのトレードオフ。Database は `&mut` を選ぶ — 各実装がキャッシュを `RwLock` で包む強制を避けるため。Provider は `&self` を選ぶ — 本番ユーザーが 1 つのプロバイダを `Arc<P>` 経由で多数のタスクから共有したいから。",
+                    },
+                    {
+                      question: "`Provider<N: Network = Ethereum>` が、単なる `Provider<N: Network>` ではなく *デフォルト付きの* 型パラメータでパラメータ化されているのはなぜか?",
+                      options: [
+                        "Rust はジェネリックトレイトに対する `dyn Trait` を成立させるためにデフォルトを要求する。",
+                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム L2 のユーザーだけ。",
+                        "`Network` は本物のトレイトではなく、ドキュメント目的のマーカーにすぎないから。",
+                        "Alloy は Ethereum 専用ライブラリとして始まり、ジェネリックパラメータは後方互換のための名残だから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム L2 を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
+                    },
+                    {
+                      question: "`get_balance` が `impl Future<Output = U256>` ではなく `RpcWithBlock<Address, U256>` を返すのはなぜか?",
+                      options: [
+                        "`RpcWithBlock` のほうが `Future` より高速で、`Future` にはできない遅延評価を実装するから。",
+                        "`RpcWithBlock` はビルダーで、ユーザーが await 前に呼び出し側で問い合わせ対象ブロックを選べる（`.block_id(N)`、`.hash(...)`、`.pending()`）。`get_balance` 内に「latest」をハードコードしてしまうと、過去のブロックを問い合わせたいユーザーは別のメソッドを組み立てざるを得なくなる。",
+                        "Rust はトレイトメソッドが `impl Future` を直接返すことを許さないから。",
+                        "`RpcWithBlock` は最終的な `impl Future` を包む後方互換シムで、alloy の将来版では削除されるから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "各 RPC メソッドには固有の *オプション構造* がある — `eth_getBalance` は任意のブロックを指定して問い合わせられる。ビルダー戻り値型はそうしたオプションをチェーンメソッドとして公開する。一般ケース（latest 用の `.await`）は簡潔に、まれなケース（`.block_id(N).await`）は明示的に保てる。`EthCall` は `eth_call` の 4〜5 個のオプションパラメータに同じことを行う。狙いは **型駆動の発見しやすさ**: IDE が戻り値型のビルダーメソッドを通じて妥当なオプションを提示してくれる。",
+                    },
+                    {
+                      question: "あなたは `SignerProvider` を書いている — 内側のプロバイダに転送する前に外向きトランザクションへ署名するラッパープロバイダだ。トレイトには 30 以上のメソッドがある。実際に書くメソッド本体はいくつか?",
+                      options: [
+                        "30 以上 — トレイトには既定実装がないので、すべてのメソッドを実装しなければならない。",
+                        "1 つ — `send_transaction` のみ。ほかは `auto_impl` から来る。",
+                        "2 つ — `root()`（`self.inner.root()` に転送）と `send_transaction`（署名してから内側に転送）。残りのメソッドはデフォルト実装が自動で `self.root()` を使う — 内側プロバイダのトランスポートにルーティングされる。",
+                        "5 つ程度 — `root()`、`send_transaction` に加え、nonce / ガス / チェーン処理のための関連メソッド `estimate_gas`、`get_transaction_count`、`chain_id` も。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "合計 2 メソッド。*必須* メソッドは `root()` のみ（`self.inner.root()` に転送する 1 行）。`send_transaction` はカスタマイズしたい本体。それ以外はトレイトのデフォルト実装が走り、`self.root()` 経由でトランスポートにアクセスする — そして `root()` 自身が内側に転送するので、結果として内側プロバイダのトランスポートに自動でルーティングされる。これが組み立てのステップ 4 の `root()` 間接化が **設計の要** である理由。(Nonce、ガス、チェーン ID の充填は別個の `Filler` が担い — `SignerProvider` と並んで `FillProvider` チェーンに組み込まれる。)",
+                    },
+                  ],
                 },
                 {
                   title: 'レッスン3 — ドリル: ログ Provider ラッパーを作る',
@@ -1113,7 +1161,55 @@ chain-agnostic ジェネリック関数書ける。
                   content: `# クイズ — Network
 
 \`Network\` トレイトの 10 関連型、トランザクション 4 状態分割、Ethereum 実装の 2 クレート構造、Optimism 並列（8 オーバーライド + 2 共有）、\`TransactionBuilder<N>\` ヘルパートレイトを確認する。
+
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Network\` のステップに戻ること。
 `,
+                  quizQuestions: [
+                    {
+                      question: "`Network` はチェーン固有な 10 種の形（TxType、TxEnvelope、TransactionRequest ほか）を、struct のジェネリックパラメータ 10 個ではなく *関連型* として持っている。Network 上ジェネリックなコードにとって、この選択が決定的に効いてくる利点は?",
+                      options: [
+                        "関連型のほうがジェネリックパラメータより高速にコンパイルされる。",
+                        "一貫性 + 簡潔さ: 関連型は「これらは組で動く」をひとまとめにする（誤って `Provider<EthereumTxRequest, OptimismReceipt>` を組み立てられない）。さらに、呼び出し側はジェネリックパラメータ 10 個ではなく `<N: Network>` ひとつだけを書けば済む。",
+                        "ジェネリックパラメータはトレイトメソッドのシグネチャには現れず、トレイト本体内でしか使えないから。",
+                        "関連型は `dyn Trait` をサポートするが、ジェネリックパラメータはしないから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "決め手は一貫性の性質。ジェネリックパラメータは「どんな組み合わせでも有効」を表現する; 関連型は「これらは組で動く」を表現する。チェーンプリミティブ — `EthereumTxRequest` は `EthereumTxEnvelope` と組まなければならない — には後者の意味論が必要。加えて、素のジェネリックでは Provider に言及するすべてのシグネチャに 10 個のパラメータを書く必要がある; `N: Network` 1 つでそれをまとめて引き込める。(コンパイル時間や `dyn` 互換性を挙げる選択肢は不正確; どちらの方式でも問題なく動く。)",
+                    },
+                    {
+                      question: "`Network` には `TransactionRequest`、`UnsignedTx`、`TxEnvelope`、`TransactionResponse` という別々の関連型がある — 一見すると同じデータの 4 つの表現。なぜ分けているのか?",
+                      options: [
+                        "後方互換 — 古い alloy バージョンが別々の型を使っていた名残。",
+                        "各表現はオプションフィールドつきの同じデータ; 分割は単なるドキュメント上の装飾。",
+                        "各表現はトランザクションのライフサイクルで異なる役割（構築 → 充填 → 署名 → 返却）を担う。分割によって不正な状態を構築できなくする: 型システムが `broadcast(&request)` や `sign(&response)` をコンパイル時に拒否する。統一型では検証がランタイムに追い出される。",
+                        "性能のため — それぞれの型に最適化されたメモリレイアウトがある。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "署名がオプション、block_hash がオプション……の 1 つの型では、検証がランタイムへ追い出される。`broadcast(&tx)` は「署名は存在するか? block_hash は不在か?」をチェックする羽目になる — 本来コンパイラが拒否すべきものがランタイムエラーになる。分割すればそうした状態をそもそも構築できなくなる。各関数のシグネチャは正しいライフサイクル状態だけを受け取るようになる。Rust のタイプステートパターンと同種のトレードオフを、Ethereum の tx に適用したもの。",
+                    },
+                    {
+                      question: "Optimism の `Network` 実装は独自の `BlockResponse` を定義する一方、Ethereum の `Header` はそのまま再利用する。なぜこの非対称が生じるのか?",
+                      options: [
+                        "`BlockResponse` は `Header` より新しく alloy に追加されたもので、Optimism 側の型がまだリファクタされていないだけ。",
+                        "`Header` はコンセンサスが定義する形で、Optimism はヘッダーレベルで EVM 互換 — number、hash、timestamp といった構造が同一。一方、`BlockResponse` は *ブロックのトランザクションリスト* を内包し、Optimism のトランザクションには OP 固有の Deposit バリアントが含まれる。Ethereum の `Block` を再利用してしまうと、OP デポジットが Ethereum 型 tx としてシリアライズされてしまい誤りになる。",
+                        "ヘッダーのほうがブロックより小さく、再利用するとメモリコストが減るから。",
+                        "`BlockResponse` は `Header` より新しい概念で、Optimism も最終的には Ethereum のものを共有する予定だから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "ここに一貫性の性質の機微が出ている。型がチェーン横断で *内容的に同一* なところは、トレイトが共有を許す — Optimism のヘッダーは文字どおり `alloy_consensus::Header` だ。型がチェーン固有の内容を抱え込む箇所（OP 型の tx を含む tx リストのように）はオーバーライドが避けられない — でなければツールが正しくシリアライズできない。**この選択はデータに強制されるものであって、好みの問題ではない。** ReceiptResponse にも同じ論理が当てはまる（L1 fee フィールドのために別物になる）。",
+                    },
+                    {
+                      question: "`TransactionBuilder<N>` は、`Network::TransactionRequest` が実装するよう要求される *別の* トレイトであって、関連型に直接生えたメソッドではない。この分離はなにを可能にしているか?",
+                      options: [
+                        "各 `Network::TransactionRequest` 実装が、ビルダーメソッドを個別にオーバーライドできるようにするため。",
+                        "Rust が関連型のメソッドを別トレイト経由で定義することを強制するから。",
+                        "N 上ジェネリックなコードを可能にするため: `fn build_request<N: Network>() -> N::TransactionRequest { <N::TransactionRequest>::default().with_to(addr).with_value(v) }`。`TransactionBuilder<N>` がトレイトなので、どのチェーンの `TransactionRequest` が選ばれても同じメソッド名で扱える — その結果、同じコードが Ethereum、Optimism、AnyNetwork で動く。",
+                        "後方互換のシム; alloy の将来版はメソッドをインライン化する予定だから。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "パターンは **型レベル辞書（Network）+ 辞書キーでパラメータ化されたヘルパートレイト（TransactionBuilder<N>）＝ チェーン横断で移植可能なコード。** 別トレイトにしなければ、`with_to(...)` や `with_value(...)` は `EthereumTransactionRequest` と `OpTransactionRequest` 各々の固有メソッドになり、`N::TransactionRequest` 経由で呼べない。別トレイトに切り出し境界として要求することで、\`<N::TransactionRequest>::default().with_to(...)\` をジェネリックに動かせる。同じイディオムが `TxEnvelope` 上の `TransactionEnvelope<Self>`、`BlockResponse` 上の `BlockResponse<Self>` にも現れる。",
+                    },
+                  ],
                 },
                 {
                   title: 'レッスン6 — ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコード',
@@ -1745,7 +1841,55 @@ nonce / gas / chain-id と同機構、\`.wallet(signer)\` 糖衣。
                   content: `# クイズ — Signer
 
 \`Signer\` / \`TxSigner\` / \`SignerSync\` の 3 トレイト分割、\`PrivateKeySigner\` のキャッシュ戦略、\`AwsSigner\` の recovery-id 復元、\`SignableTransaction\` 接着剤、\`WalletFiller\` の \`TxFiller<N>\` 統合を確認する。
+
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Signer\` のステップに戻ること。
 `,
+                  quizQuestions: [
+                    {
+                      question: "Alloy は署名を 2 つのトレイトに分けている: \`Signer\`（チェーン非依存。ハッシュ / メッセージに署名）と \`TxSigner<Sig>\`（チェーン認識。\`SignableTransaction\` 経由でトランザクションに署名）。なぜ \`TxSigner\` は \`Signer\` のメソッドではなく、*別の* トレイトなのか?",
+                      options: [
+                        "後方互換のため — 古い alloy バージョンには \`Signer\` しかなく、\`TxSigner\` は非破壊な追加として後付けされたから。",
+                        "署名操作の大部分は tx 署名ではない（dapp の利用は EIP-191 メッセージや EIP-712 typed data が支配的）。まれな tx ケースのために \`Signer\` 全体をチェーンでパラメータ化すると、すべての署名者のシグネチャがふくらむ。加えて、\`Signer\` 実装（\`PrivateKeySigner\` など）はチェーン非依存でネットワーク横断に再利用できる — \`N\` でタグを付けると、チェーンごとに 1 つの署名者 struct を強いることになる。",
+                        "Rust のトレイト一貫性ルールが、同じトレイトに sync と async のメソッドを混在させることを禁じるから。",
+                        "\`Signer\` は外部ライブラリが実装し、\`TxSigner\` は alloy が実装する。明確な境界を保つために分けている。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "理由は 2 つが重なっている。第一に、署名操作はたいてい tx 署名ではない — 本番コードの大半は EIP-191 メッセージか EIP-712 typed data に署名する。\`Signer\` に tx 署名を載せると、まれなケースのために全署名者をパラメータ化する羽目になる。第二に、\`PrivateKeySigner\` は本質的にチェーン非依存(secp256k1 鍵は Ethereum か Optimism かを気にしない)。\`Signer\` を \`N\` でタグ付けすると、\`PrivateKeySigner<Ethereum>\` と \`PrivateKeySigner<Optimism>\` を別型として要求することになり、ムダが生じる。分割によって \`Signer\` をチェーン非依存で再利用可能に保ちつつ、\`TxSigner<N>\` がチェーン固有の tx 署名能力を担う — *1 つの* \`Signer\` 実装で *複数の* チェーンに対応できる。",
+                    },
+                    {
+                      question: "\`Signer<Sig = Signature>\` は \`Sig\` を関連型ではなく、*トレイトのジェネリックパラメータ* としてパラメータ化している（\`Network::TxEnvelope\` のような関連型ではなく）。決定的な理由は?",
+                      options: [
+                        "ジェネリックパラメータのほうが関連型より高速にコンパイルされるから。",
+                        "関連型はデフォルトを持てず、ジェネリックパラメータは持てるから。\`Signature\` をデフォルトにできることが唯一の理由。",
+                        "1 つの署名者が、異なる \`Sig\` 型でトレイトを *複数回* 実装したい場合があるから — 例: 同じ struct に \`impl Signer<Signature> for X\` と \`impl Signer<RawBytes> for X\` を併存させる。ジェネリックパラメータ ＝ 「互換な Sig を任意に選んで、このトレイトを複数回実装できる」。関連型 ＝ 「実装ごとに Sig をひとつだけ確定する」。署名者には複数実装を許す形が正しい意味論。",
+                        "ジェネリックパラメータは \`dyn Trait\` を許すが、関連型は許さないから。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "選択の基準は、型ごとに複数の実装が意味を持つかどうか。Network の \`TxEnvelope\` はチェーンごとに固定（Ethereum に対して有効な TxEnvelope 型を 2 つ持つことはありえない）— 関連型が合う。Signer の \`Sig\` は操作ごとに異なりうる: ECDSA 鍵の署名者は通常用途に \`Signature\` を、生バイト出力 API に \`Bytes\` を生成できる — ジェネリックパラメータならその両立が可能。**ジェネリック ＝ 「複数実装が有効」。関連 ＝ 「型ごとに 1 つの実装」。** 同じ形の設計判断でも、ユースケースで答えが変わる。（デフォルト値はどちらの形式でも持てる — それは理由にはならない。)",
+                    },
+                    {
+                      question: "\`PrivateKeySigner\` も \`AwsSigner\` も、\`address()\` を呼び出すたびに計算するのではなく構築時にキャッシュしている。なぜ重要か — コストモデルはどうなっているか?",
+                      options: [
+                        "\`address()\` は private で、実質的に signer クレートの外から呼ばれないから。キャッシュは様式的な選択にすぎない。",
+                        "\`address()\` は *すべてのトランザクション* で呼ばれる（追跡、ロギング、署名適格性チェック、コールフレーム構築などのため、tx ごとに複数回呼ばれることも多い）。\`AwsSigner\` でキャッシュなしだと、\`address()\` の呼び出しごとに AWS への往復が発生し、tx あたり 50〜200ms のレイテンシが乗る。\`PrivateKeySigner\` ならキャッシュなしでも 1 回ごとの keccak256-of-pubkey で済むが、それでもムダ。構築時のキャッシュは、一度きりのセットアップと、ほぼゼロの per-call コストを取引する形になる。",
+                        "Ethereum プロトコルが、セッション中の全呼び出しで \`address()\` が安定値を返すことを要求するから。",
+                        "Rust の借用チェッカーが \`address()\` を作業つきのメソッドにすることを許さないから — 事前計算値を読まざるをえない。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "鍵はアクセスパターン。すべてのトランザクションが \`address()\` に少なくとも 1 度（送信者チェック、署名適格性）触れ、ロギング、監視、コールフレーム構築のためにそれ以上触れることも多い。とくに \`AwsSigner\` でキャッシュなしだと、tx ごとに \`describe_key\` への往復が発生する — *誰の鍵で署名するかを知るためだけに* 全トランザクションを AWS のレイテンシで待たせることになる。構築時に 1 度キャッシュ（\`AwsSigner::new\` 内で）すれば、そのコストは 1 回しか支払われない。\`PrivateKeySigner\` の per-call コストは「非圧縮 pubkey の keccak256 の末尾 20 バイトを取る」処理 — 安価ではあるが、繰り返すのは無意味。**tx ごとに繰り返す高コストはキャッシュする; もとから安価なコストはキャッシュしない。**",
+                    },
+                    {
+                      question: "ユーザーコードが \`ProviderBuilder.wallet(signer).build()\` を呼ぶ。alloy 内部を追ってみる: 出来上がるプロバイダの実際の層構造はどうなっており、\`sign_transaction\` はどこで呼ばれるか?",
+                      options: [
+                        "\`ProviderBuilder.wallet(signer)\` は署名者をプロバイダに直接格納する。\`send_transaction\` が内側プロバイダへ転送する前に、内部で \`signer.sign_transaction()\` を呼ぶ。",
+                        "\`.wallet(signer)\` は \`.layer(WalletFiller::new(signer))\` の糖衣 — FillProvider チェーンに \`WalletFiller<W>\` を \`TxFiller<N>\` として組み込む（\`NonceFiller\`、\`GasFiller\`、\`ChainIdFiller\` と並べて）。ユーザーが \`provider.send_transaction(...)\` を呼ぶと、各 filler の \`fill()\` がスタック順に実行され、\`WalletFiller::fill\` が値の埋まった unsigned tx に対して \`wallet.sign_transaction()\` を呼んで署名を取り付ける。",
+                        "\`.wallet(signer)\` は単なる便利メソッド — 署名者はリクエスト型へ move され、署名は RPC エンコード後のトランスポート層で行われる。",
+                        "\`.wallet(signer)\` は、次のプロバイダ層に「署名済みリクエストを期待する」と伝えるマーカー。署名は \`send_transaction\` 呼び出しの前に外部で済ませる前提だ。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "\`.wallet(signer)\` は \`.layer(WalletFiller::new(signer))\` の糖衣。署名者は nonce / gas / chain-id と同じ Filler 機構を経て Provider チェーンに組み込まれる — \`WalletFiller<W>\` は FillProvider チェーンで動く \`TxFiller<N>\` だ。リクエストが流れると、各 filler はスタック順に実行される（典型的には nonce → gas → chain-id → wallet → send）。Wallet filler が最後に来るのは、署名ハッシュを計算する前に unsigned tx が完全に埋まっている（nonce / gas / chain-id が充填済み）必要があるから。Provider チェーン由来の合成パターンがここでもそのまま使われ、署名が新しいプレイヤーとして加わるかたち。",
+                    },
+                  ],
                 },
                 {
                   title: 'レッスン9 — ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx',
@@ -2163,7 +2307,44 @@ let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
                   content: `# クイズ — Inside Alloy 完走
 
 3 トピックチェーン（Provider / Network / Signer）+ Testing の構造的事実を確認する。3 中級コース（Revm・Reth・Alloy）完走に向けたゲート。
+
+3 問。**クイズはうなずきでは通せない。** 2 問落としたら、Inside Alloy を終えたと言う前に、該当チェーンの組み立てを読み直すこと。
 `,
+                  quizQuestions: [
+                    {
+                      question: "\`Provider\` の \`root()\` メソッドはトレイトで唯一必須のメソッド — ほかの RPC メソッドはすべてデフォルト実装を持つ。設計上、決定的に効いているアーキテクチャ的な意図は?",
+                      options: [
+                        "ロギング / トレース用にプロバイダ名を返すため。",
+                        "ラッパープロバイダ（署名、filler チェーン、カスタム層）が 30 以上の RPC メソッドを再実装せずにトランスポートアクセスを委譲できるようにするため。ラッパー側は \`root()\` を内側プロバイダの \`root()\` へ転送する。あとはトレイトのデフォルト実装が \`self.root()\` 経由で実トランスポートへルーティングする — ラッパーの塔を自動的に貫通していく。",
+                        "API 安定性のために残された後方互換メソッドだから。",
+                        "Rust の \`dyn Provider\` インフラに必要だから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "\`root()\` の間接化こそが FillProvider のスタックを成り立たせている要素。ラッパー作者は *メソッド本体ひとつ*（root の転送）と、オーバーライドしたい特定のメソッドだけを書けばよい; 残りの 30 以上のメソッドはトレイトのデフォルト実装からそのまま得られる。これがあるからこそ \`LoggingProvider\`、\`FillProvider\`、\`WalletFiller\` や任意のカスタム層が、N×M のメソッド本体爆発なしに合成できる。Provider チェーンのステップ 4 で見たパターンそのもの。",
+                    },
+                    {
+                      question: "\`Network\` は、トレイトのジェネリックパラメータ 10 個ではなく、*関連型* を 10 個（TxType、TxEnvelope、TransactionRequest、TransactionResponse、ReceiptEnvelope、ReceiptResponse、Header、HeaderResponse、BlockResponse、UnsignedTx）持っている。Network 上ジェネリックなコードに対して効いてくる利点は?",
+                      options: [
+                        "関連型のほうがジェネリックパラメータより高速にコンパイルされるから。",
+                        "一貫性 + 簡潔さ: 関連型は「これらは組で動く」をひとまとめにする（Ethereum の TxRequest は Ethereum の TxEnvelope と組まなければならず、Optimism のものとは組めない）。加えて、呼び出し側は素のジェネリック 10 個ではなくパラメータ 1 個（\`<N: Network>\`）を書けばよい。",
+                        "ジェネリックパラメータはトレイトメソッドのシグネチャでは使えず、トレイト本体内でしか使えないから。",
+                        "関連型は \`dyn Trait\` をサポートし、ジェネリックパラメータはしないから。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "決め手は一貫性の性質。\`Provider<EthereumTxRequest, OptimismReceipt>\` は素のジェネリックならコンパイルしてしまう — 違うチェーンの型を混ぜるのを止める仕組みがない。関連型なら 1 つの \`Network\` 実装の下にまとまり、\`Ethereum\` を選んだ時点で一貫した一式が選ばれる。加えて、Provider に言及するすべてのシグネチャに素のジェネリック 10 個を書く必要がなくなり、\`N: Network\` 1 つで 10 種類の型をまとめて引き込める。alloy 内のほかの場所でも同じイディオムが使われる: \`TransactionEnvelope<Self>\`、\`BlockResponse<Self>\` — 辞書キーでパラメータ化されたヘルパートレイトが、N 上ジェネリックなコードを移植可能に保つ。",
+                    },
+                    {
+                      question: "ユーザーコードが \`ProviderBuilder.wallet(signer).on_http(url)\` を呼ぶ。alloy 内部を追ってみる: \`signer\` を Provider チェーンに組み込んでいる実際の仕組みは?",
+                      options: [
+                        "\`.wallet(signer)\` は署名者をプロバイダに直接格納し、\`send_transaction\` の内部で \`signer.sign_transaction()\` を呼ぶ。",
+                        "\`.wallet(signer)\` は \`.layer(WalletFiller::new(signer))\` の糖衣 — FillProvider チェーンに \`WalletFiller<W>\` を \`TxFiller<N>\` として組み込む（\`NonceFiller\` / \`GasFiller\` / \`ChainIdFiller\` と並べて）。\`send_transaction\` が走ると、各 filler の \`fill()\` がスタック順に実行され、\`WalletFiller::fill\` が値の埋まった unsigned tx に対して \`signer.sign_transaction()\` を呼んで署名を取り付ける。",
+                        "\`.wallet(signer)\` は、次のプロバイダ層に「署名済みリクエストを期待する」と告げるマーカー。署名は外部で行われる。",
+                        "\`.wallet(signer)\` は基盤トランスポートを差し替え、出ていく JSON-RPC ペイロードに署名を注入する。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "\`.wallet(signer)\` は \`.layer(WalletFiller::new(signer))\` の糖衣。署名者は nonce / gas / chain-id と同じ Filler 機構を経て Provider チェーンに組み込まれる — \`WalletFiller<W>\` は FillProvider チェーン上で動く \`TxFiller<N>\` だ。順序が重要: \`WalletFiller\` は *最後* に走る — 署名ハッシュを計算する前に nonce / gas / chain_id が埋まっている必要があるから。3 つのチェーン（Provider の \`Filler\`、Network の \`TxFiller<N>\`、Signer の \`Signer\` + \`WalletFiller\`）が 1 つの実行可能プログラムに合成される — 3 つすべてをやり切ったアーキテクチャ上の見返りだ。",
+                    },
+                  ],
                 },
               ],
             },
