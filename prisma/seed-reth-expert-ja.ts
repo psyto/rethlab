@@ -8,10 +8,10 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       slug: 'reth-expert-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
+        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧、ペイメントレール工学)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
       difficulty: 'EXPERT',
-      duration: 457,
-      xpReward: 815,
+      duration: 485,
+      xpReward: 885,
       track: 'reth-expert',
       tags,
       isPublished: true,
@@ -3349,10 +3349,203 @@ Deposit / L1 cost / L1 oracle / 独立 consensus / Sequencer / Native 資産。
 `,
                 },
                 {
+                  title: 'レッスン23 — ペイメントレール工学（決済が製品になる L1 カテゴリ）',
+                  slug: 'payment-rail-engineering-ja',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 28,
+                  xpReward: 70,
+                  content: `# レッスン23 — ペイメントレール工学（決済が製品になる L1 カテゴリ）
+
+## 問い
+
+Stripe や Meta が運用するペイメントレールを作るとする。**chainspec / executor / precompile / indexer のどこが、トレーダ向け L1 と具体的に違うか？**
+
+レッスン22 を終えれば [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を「Reth + カスタマイズ」として読める。本レッスンはその前段の問いを立てる: **そのカスタマイズは何のためか？** 4 つの category shift を名指して、それぞれをソースで verify できるようになると、Tempo でも次に出てくる別のペイメントレールでも、ツアーガイドなしに読めるようになる。
+
+## 原理（最小モデル）
+
+ペイメントレール L1 は汎用 L1 と比べて 4 つの shift を起こす:
+
+1. **決済保証 > スループット。** 可逆性、ディスピュート期間、ファイナリティ証明。スループットはこの 3 つが揃ってから初めて意味を持つ。（Stripe はチャージバックする。L1 は何ができる？）
+2. **Fee 抽象化 > Fee bidding。** マーチャントが法定通貨換算で予測可能な手数料を払い、ユーザは 0 を払う。paymaster、スポンサー関係、プロトコル層での fee bundling で実装する。（MPP HTTP-402 は支払いそのものを negotiation surface にする。）
+3. **Identity hook > 匿名性。** コンプライアンス、KYC、制裁、規制対象資産ゲートが第一級。匿名性はレール内で opt-in、default ではない。（Tempo の TIPs — [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) — がこれらをアプリケーションでなく protocol の関心事として規定。）
+4. **chain 非依存 surface > chain 固有 UX。** 支払い protocol が payment-method 非依存、chain は 1 つの実装に過ぎない。Stripe / ACH / Tempo は同じ MPP インタフェースの裏に並ぶ。（[\`tempoxyz/mpp-specs/specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) が各ネットワークが plug-in する場所。）
+
+3 つのデータポイント（Tempo 1 社の話でなく **カテゴリ** であることを示すため）:
+- **Tempo** — Stripe の chain-abstraction レール。Reth-as-library + MPP + Zones + TIPs。
+- **Hyperliquid USDC bridge** — HL perp ポジションに資金を供給する決済層。bridge が保証 + identity を担い、HL core はスループットだけ。
+- **Base USDC + Coinbase Pay** — コンシューマウォレットレール。Base がスループット、Coinbase が identity と fee 抽象化をウォレット層で担う。
+
+4 つの shift は 3 つで **配置場所が違う** — Tempo は L1 に全部束ねる、HL は保証を bridge に分離、Base は fee をウォレットに分離。**同じ shift、違う置き場所。** これが test だ: 4 つの shift がスタックのどこかに locatable なら、それはペイメントレール。
+
+## 1. 問いを正しく立てる
+
+レッスン22 の [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) データポイントを見よ: 0 commits ahead, 1374 commits behind upstream。fork せず compose した。**「どう」には答えたが、「なぜ」には答えていない。** なぜカスタマイズが必要だったか？ 汎用 Reth が既に提供していないものを、ペイメントレールが必要とするのは何か？
+
+安易な答え — 「規制コンプライアンス」 — は不完全だ。コンプライアンスは 4 つのうち *1 つ*（identity hook）に過ぎない。残り 3 つは規制者が見ていようがいまいが存在する技術パターンだ。KYC ゼロのセルフカストディ USDC 決済レールでも、決済保証・fee 抽象化・chain 非依存 surface が必要 — でなければ「ただの L1」であって「ペイメントレール」ではない。
+
+> 🛑 **予測。** 4 つの shift を読み込む前に書き出せ: vanilla Reth（カスタマイズなし）を Stripe の L1 として使ったら何が起きる？「動かない」ではなく具体的な失敗を 3 つ。
+
+## 2. Shift 1 — 決済保証 > スループット
+
+汎用 L1 で「決済済み (settled)」が意味すること: tx が chain に入った、N 回以上 confirm された。それだけ。可逆性 primitive なし、チャージバックなし、ディスピュート期間なし。
+
+ペイメントレールで「決済済み」が意味すること:
+- **可逆性ウィンドウつきファイナリティ。** 合意またはアテスタによってその間に reverse できる期間。汎用 chain にこの概念は無いことが多い → ペイメントレール L1 は protocol に焼き付ける（Tempo の [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) のアプローチ）か、application 層に押し出す（HL bridge モデル）かのいずれか。
+- **ファイナリティのアテステーション。** Stripe はマーチャントに「資金が confirm された」と言うのではない、「*settled*、不可逆」と言う。ペイメントレール L1 は included / final / settled を区別しなければならない。汎用 L1 はこの 3 つを「confirm 数」に折りたたんでしまう。
+- **チャージバックモデル。** protocol 層（mutual-consent reverse precompile）または application 層（escrow + dispute attestor）のいずれかで持つ。これがないとコンシューマ決済を捌けない — B2B 専用になる。
+
+実装 surface はここに落ちる:
+- アテステーション / 取り消し用カスタム **precompile**（executor 層）
+- 可逆決済用カスタム **transaction type**（chainspec 層）
+- inclusion 状態とは別に settlement 状態を露出するカスタム **RPC namespace**（\`tempo_*\`）
+
+[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) で探せ: [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) に protocol 層の定義、[\`crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates) に precompile 実装。
+
+> 🛑 **予測。** vanilla Reth に「決済アテステーション」precompile を追加したい。どの trait、どの slot、どの \`NodeBuilder\` メソッドを呼ぶ？ 答えられなければレッスン20（Custom Executor）を読み直す。
+
+## 3. Shift 2 — Fee 抽象化 > Fee bidding
+
+汎用 chain: ユーザが tx に署名、native asset で gas を払う、fee は public mempool での bid。
+
+ペイメントレール: ユーザは *intent* に署名、マーチャントまたはレール運営者が法定通貨換算で fee を払う、chain は決定論的に既知の per-tx コストで実行。
+
+実装は 2 層:
+
+1. **paymaster パターン**（EIP-7702 + ERC-4337） — ウォレット層スポンサーシップ、レールが relay。Building tier L5（\`build-7702-sponsor\`）が end to end で扱う。
+2. **MPP HTTP-402** — protocol 層。**支払い自体が HTTP 認証の negotiation になる**。[\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) から:
+
+\`\`\`
+Client → GET /resource
+Server → 402 Payment Required + WWW-Authenticate: Payment
+Client → 支払いを fulfill
+Client → GET /resource + Authorization: Payment <credential>
+\`\`\`
+
+[\`specs/core\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) が HTTP セマンティクスを定義、[\`specs/intents\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) が支払いパターン（charge / authorize / subscription）を定義、[\`specs/methods\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) が Tempo / Stripe / ACH それぞれが intent を fulfill する方法を定義する。
+
+重要なのは: **MPP は Tempo Labs と Stripe が共同 maintainer**。これはパートナーシップマーケティングでなく構造的事実だ。protocol は決済が Tempo chain で起きるか、Stripe の法定レールで起きるか、ACH で起きるかを抽象化する。MPP を integrate するマーチャントはレールを選ばない、レールが intent + コストに基づいて自分を選ぶ。
+
+> 🔍 **リポジトリで確認。** [\`tempoxyz/mpp-specs/specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) を開く。intent type を挙げ、それぞれ 1 文で説明する。次に [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) を開く — 具体的な payment method がいくつ規定されているか、method spec はどんな形か？
+
+## 4. Shift 3 — Identity hook > 匿名性
+
+汎用 chain: アドレスは default で匿名、KYC は off-ramp（CEX または bridge）で起きる。
+
+ペイメントレール: identity は protocol の関心事。あるアドレスは attested-individual、あるアドレスは attested-business、あるアドレスは匿名。これらの attestation で transaction の振る舞いが変わる。
+
+protocol surface の 3 パターン:
+
+- **コンプライアンス precompile。** アドレスを受け取り attestation 状態を返す precompile。安価に呼べる、smart contract が gate にする。Tempo の [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) ディレクトリがこれらを規定する場所。
+- **独立 identity chain としての attestation。** Worldcoin パターン — identity が独自 chain にあり、cross-chain メッセージで access。
+- **bridge 層 KYC。** Hyperliquid パターン — KYC は USDC デポジット bridge で起きる、chain 自体は post-deposit では匿名のまま。
+
+reading test: [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) を開く。identity / attestation / コンプライアンスを扱う TIP を探す。それを「どの crate が実装するか」「\`NodeBuilder\` のどの slot で wire-in されるか」にマップする。
+
+## 5. Shift 4 — chain 非依存 surface > chain 固有 UX
+
+最大の shift、そして大半のエンジニアが見落とすもの: **ペイメントレールの public interface は支払い protocol であって chain ではない。**
+
+ユーザ、エージェント、マーチャントは MPP と対話する。「私の支払いを Tempo でやって」とは言わない。402 を受け取り、それを fulfill し、protocol が intent を満たす method を — chain / ACH / カード / 何でも — 選んでルーティングする。
+
+アーキテクチャ的に意味すること:
+- chain は複数の method のうちの 1 つ。
+- chain の UX（gas / nonce / RPC / bridging）は protocol 層に隠される。
+- chain は swappable（Solana method を足す、ACH method を deprecate）— マーチャント integration を変えずに。
+
+汎用 L1 と対比すると: chain *が* interface である。RPC、ウォレット、gas 見積もり、ブロックエクスプローラ — ユーザは chain の上にいる。
+
+これがコード上の「Stripe of crypto」テーゼ、マーケティングではなく: Stripe の価値は支払いプロセッサであることでなく、**裏側の支払い method を実装詳細にすること** だ。MPP は同じことを chain に対してやる。
+
+> 🛑 **予測。** MPP の payment-method 抽象化が正しいとすると、ペイメントレールの売上と chain の transaction volume の関係は？ 2 文でスケッチしてから先へ。
+
+（答え: 弱い結合。MPP volume はオンチェーン volume を伸ばさずに伸びうる — 決済はより速い method 経由で settle されうるため。これは L1 の経済性のちょうど逆。**レールは chain が支配的な決済 method になることに賭けていない**。）
+
+## 6. 具体例 — 決済 1 件を end to end でなぞる
+
+仮想の $0.05 API アクセス決済を MPP 経由で Tempo に settle するシナリオ:
+
+1. **Client → Server。** \`GET /api/v1/premium-feature\`（プレミアム API アクセスを買うエージェント）。
+2. **Server → Client。** \`HTTP/1.1 402 Payment Required\` + \`WWW-Authenticate: Payment realm="api.example.com" method="mpp"\` + intent 指定（charge / $0.05 / currency USD）。
+3. **Client → MPP method resolver。** Tempo をレールとして選ぶ（この intent でコスト最小）。
+4. **Client → Tempo ウォレット / paymaster。** オンチェーン決済を構築: intent から導出されたマーチャントアドレス宛に、Tempo 上の USD-stable で $0.05 相当を transfer する単一 tx。
+5. **Tempo chain。** tx が Tempo カスタム executor を通って実行。決済アテステーション precompile が発火し、決済済み状態を記録。identity TIP hook が両方のアドレスを check、両方 pass。
+6. **\`tidx\` indexer。** 決済イベントを ~1s でマーチャントに surface（OLTP 経路）。
+7. **Client → Server。** \`GET /api/v1/premium-feature\` + \`Authorization: Payment <credential>\`（credential は決済済み tx ハッシュを参照）。
+8. **Server。** credential を MPP method の決済済み状態 RPC で validate、リソースを serve。
+
+各 step は具体的な file path または RPC call にマップされる:
+
+| Step | どこにあるか |
+| :--- | :--- |
+| 2 — 402 + WWW-Authenticate | [\`tempoxyz/mpp-specs/specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) |
+| 3 — method 解決 | [\`tempoxyz/mpp-specs/specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) |
+| 4 — Tempo 決済 tx | [\`tempoxyz/tempo/crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates)（executor + precompile） |
+| 5 — 決済アテステーション | [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) の TIP 定義 + [\`crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates) の precompile |
+| 5 — identity TIP hook | TIP 定義 + chainspec での wiring |
+| 6 — 決済済み状態の surface | [\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx)（Building L3 で扱う） |
+| 7 — Authorization header | [\`tempoxyz/mpp-specs/specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) |
+| 8 — credential validation | マーチャント側ライブラリだが Tempo node の RPC endpoint を使う |
+
+**どの step もマジックでない。** すべて public source にある。表が伝えるレッスン: ペイメントレールはこれらの surface の *合成* であって、どれか 1 つではない。4 つの shift がすべて wire されないとレールは動かない。
+
+## 7. やりがちな勘違い — 「速い L1 を使えば済む」では届かない
+
+4 つの shift を聞いた合理的なエンジニアはこう考えるかもしれない: 大半はアプリケーション層の関心事に見える。スループットには Solana、fee 抽象化には paymaster コントラクト、cross-chain には Circle CCTP を使えばいい。なぜペイメントレールは category として存在する必要があるのか？
+
+答えは個別の shift にではなく shift の **合成** にある。速い L1 + bolt-on paymaster + bridge で得られるもの:
+
+- 決済保証: **まだ欠ける** — Solana には可逆性 primitive がない。bolt-on は chain 全体の tx セマンティクスを変えずに追加できない。
+- Identity hook: **断片化する** — bridge での KYC はデポジットしか捕まえない、chain 内転送は捕まえない。コントラクト向けのアテステーション surface が一貫しない。
+- chain 非依存 surface: **逆転する** — Solana が public surface になる、ユーザがそれを選ぶ、ウォレットがそれを target にする、RPC が Solana 形状。MPP はこれを大改造なしには abstract できない。
+- Fee 抽象化: **おおむね動く**（paymaster で）— ただし chain ごとに paymaster セマンティクスが違う。bolt-on が部分的に解ける唯一の shift。
+
+4 つの shift は **個別機能でなくシステムとして load-bearing**。ペイメントレール L1 category が存在するのは、4 つの shift を chain 層でバンドルして提供する方が、汎用 L1 にレトロフィットするより安いから。
+
+これは「組み込みに Linux を使えばいいんじゃない？」と同じ形だ。答えは「Linux ではできない」ではなく、「汎用 Linux に RTOS の保証を後付けする統合コストが、目的特化システムを作るより高い」。**Tempo は Solana に対して、QNX が Linux に対するもの** — 同じ概念的な動きを、決済に適用した。
+
+## ドリル
+
+4 つから 2 つ選ぶ。各 ~30 分のソース読解、出力は短い書面成果物。
+
+1. **Tempo で決済アテステーション surface を見つける。** [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開き、決済アテステーション（Shift 1）を実装する crate を探す。(a) それを定義する TIP、(b) precompile または transaction type 実装、(c) executor / chainspec への wire-in 場所、を特定。5 行で file path にマップ。
+2. **MPP の intent type をすべて読む。** [\`tempoxyz/mpp-specs/specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) を開く。各 intent spec を読む。intent ごとに 1 文で何をするか、汎用 chain tx と何が違うかを書く。次に、なぜ MPP がこれらを protocol の関心事として定義し、application に任せないのかを 1 段落で書く。
+3. **Tempo で identity hook の場所を特定する。** [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) を開く。identity / attestation / コンプライアンスを扱う TIP を探す。各 TIP について (a) どんな状態を規定するか、(b) どの crate が実装しそうか、(c) どの既存 Reth trait を拡張する実装になるか、を書く。
+4. **Tempo 以外のペイメントレールを 4 shift にマップする。** Hyperliquid USDC、Base USDC + Coinbase Pay、Solana Pay から 1 つ選ぶ。4 つの shift それぞれについて、スタックのどこで起きるか（または起きないこと）を 2-3 文で特定。Tempo のマップと比較する。成果物 1 ページ。
+
+## 合格基準
+
+- 4 つの shift を任意の順序で記憶から 1 文ずつ言える。
+- 各 shift について、主実装 surface（chainspec / executor / precompile / payload builder / RPC namespace）を即答できる。
+- 「速い L1 + paymaster で済むはず」が再現できない理由を 2-3 文で説明できる。
+- 少なくとも 1 つの非 Tempo ペイメントレール（HL bridge か Base USDC + Coinbase Pay）で 4 つの shift の置き場所を特定できる。
+- 具体例の 8 step のうち少なくとも 5 step について、表を見ずに file path または RPC を言える。
+
+これを再読なしで満たせなければ category が landing していない — section 1 と具体例を読み直す。
+
+## 📺 さらに読む
+
+- L13（本コース） — EVM プライバシー / Tempo Zones — 同じスタックのプライバシー slot
+- L22（本コース） — Paradigm スタックケーススタディ — 本レッスンが抽象化したソース深読み
+- Building L3 — \`tidx\` indexer — 決済済み状態をマーチャントに露出するデータ surface
+- Building L10 — HTTP 402 / MPP machine-payments endpoint — 実装ラボの相補
+- [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — protocol、Tempo Labs + Stripe 共同 maintainer
+- [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — node + TIPs
+- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — レールに anchored されたプライバシー
+
+## まとめ（3行）
+
+- ペイメントレール L1 を作る 4 つの category shift: 決済保証 > スループット、Fee 抽象化 > Fee bidding、Identity hook > 匿名性、chain 非依存 surface > chain 固有 UX。
+- 各 shift は特定の Reth 拡張 slot にマップされる。shift は合成される、汎用 L1 に bolt-on でレトロフィットできない。MPP protocol（Tempo + Stripe 共同 maintainer）が category の chain 非依存 surface。
+- 同じ 4 shift は他のレール（HL USDC bridge、Base + Coinbase Pay）にも surface する — 同じ shift、違う置き場所。**ペイメントレールは「どの会社が運営するか」でなく「4 つの shift がどこにあるか」で識別する。**
+`,
+                },
+                {
                   title: 'クイズ — Reth ベース chain まとめ',
                   slug: 'reth-chains-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 50,
                   content: `# クイズ — Reth ベース chain まとめ
