@@ -8435,6 +8435,7 @@ If you're forking this course's code into a production chain, treat this list as
 
 Within rethlab:
 - **Reth Expert** (track \`reth-l1-architect\`, course 7+) — deep dives on \`BlockExecutor\`, state-root verification, MDBX internals. Natural next once you want \`validate_payload\` to actually execute transactions.
+- **[Reth Expert L11 — Running a Reth fork in production](/courses/reth-expert-en/lessons/reth-fork-production-en)** — once your devnet runs, this is the immediate next step. Same shape (build flags + monitoring + diff testing + upgrade discipline), applied to a fork that ships.
 - **Reth Consensus Engineering** — covers slashing, vote extensions, fault tolerance at depth. Where you'd go after multi-validator gossip is working.
 
 Outside rethlab:

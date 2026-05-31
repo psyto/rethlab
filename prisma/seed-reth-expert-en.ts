@@ -2480,7 +2480,7 @@ If any answer is shaky, re-read the section referenced.
 
 ---
 
-**You've reached the end of Reth Expert.** The Building tier puts every pattern from this course into production apps; the L1 Architect tier (Advanced) uses the same discipline at the protocol design layer. Across Expert you've read performance internals, MDBX storage, Tokio concurrency, proc macros, tracing, custom precompiles, MPT proofs, stateless execution, MEV in production, zkEVM, fork ops, differential fuzzing, and — with this lesson — production privacy stack design. That is the source-level vocabulary every team you'd want to work on this stack with is already using.
+Privacy is **one surface** of a payment-rail L1; the four category shifts (settlement assurance / fee abstraction / identity hooks / chain-agnostic surface) are covered in [Lesson 23 — Payment-rail engineering](/courses/reth-expert-en/lessons/payment-rail-engineering-en). Tempo Zones is what surfaces on the diagram once the rail commits to "some payments are confidential by default" — read L13 and L23 as the same stack from two angles.
 
 ## Summary (3 lines)
 

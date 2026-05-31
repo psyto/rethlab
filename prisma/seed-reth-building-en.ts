@@ -4017,6 +4017,10 @@ The lesson is **not complete** until all three pass against your endpoint runnin
 
 > **🧭 Where you are now in the stack:** you've shipped the **networking-layer payment protocol** — HTTP 402 challenge, micropayment receipt, replay protection. Same abstraction pattern as TLS extending HTTP with crypto, applied to settlement. With this, the tier's 11 lessons are complete — every layer of the systems-engineering stack (networking, database, VM, authentication, concurrency) now has at least one application built end-to-end against it, with a test gate proving it works. **That's the tier's promise delivered.**
 
+## Expert continuation
+
+You've built the application-layer endpoint. The Expert-tier counterpart is [Payment-rail engineering — the L1 category when settlement is the product](/courses/reth-expert-en/lessons/payment-rail-engineering-en), which extracts the four category shifts (settlement assurance / fee abstraction / identity hooks / chain-agnostic surface) that explain why MPP exists as a protocol in the first place — and lets you read any payment-rail L1, not just Tempo's.
+
 ## Summary (3 lines)
 
 - HTTP 402 + Tempo MPP = sub-cent micropayments per API call. AI agents pay for API calls per request → agentic workflows become economical.

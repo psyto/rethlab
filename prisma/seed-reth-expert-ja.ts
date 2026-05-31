@@ -2042,6 +2042,10 @@ Zone が Tempo のレジストリプロキシをデプロイ → \`isAuthorized\
 - \`IVerifier\` インタフェース化の意味を言える。
 - EVM レベル 3 修正と TIP-403 継承の仕組みを言える。
 
+## Expert への接続
+
+プライバシーはペイメントレール L1 の **1 つの surface**。4 つの category shift（決済保証 / Fee 抽象化 / Identity hook / chain 非依存 surface）は [レッスン23 — ペイメントレール工学](/courses/reth-expert-ja/lessons/payment-rail-engineering-ja) で扱う。Tempo Zones は「一部の支払いは default で confidential」とレールが commit したときに図に出てくるもの — L13 と L23 を同じスタックを 2 角度から見たものとして読む。
+
 ## まとめ（3行）
 
 - 3 ダイヤル（信頼 / 暗号 / DX）が EVM プライバシー設計空間、Tempo Zones は「シーケンサ信頼 + 古典暗号 + 標準 EVM」の角（機関投資家賭け）。

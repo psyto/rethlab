@@ -4985,7 +4985,7 @@ cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed
 
 ## 次に行く先
 
-- **rethlab 内**: Reth Expert（\`reth-l1-architect\`、ステップ2 CLOB+ — \`BlockExecutor\` / state-root / MDBX 深掘り）/ Reth Consensus Engineering（slashing / vote extension / fault tolerance）。
+- **rethlab 内**: Reth Expert（\`reth-l1-architect\`、ステップ2 CLOB+ — \`BlockExecutor\` / state-root / MDBX 深掘り）/ [Reth Expert L11 — Running a Reth fork in production](/courses/reth-expert-ja/lessons/reth-fork-production-ja)（devnet が動いたら次に来る、まさにこれ — build flag / monitoring / diff testing / upgrade 規律を fork に適用）/ Reth Consensus Engineering（slashing / vote extension / fault tolerance）。
 - **rethlab 外**: \`psyto/openhl\` Stages 8-9（CLOB + custom precompile）/ Malachite spec docs / 実 Reth full node（\`cargo run --bin reth -- node --chain dev\`）/ \`category-labs/monad-bft\`（もう 1 つの成熟 Rust BFT。Malachite は *embeddability* 最適、Monad-BFT は *single-chain throughput* 最適 — Rust BFT は単一の shape でないと腹落ちする。**GPLv3 なので citation/読解 OK、code copy は NG**）。
 
 ## まとめ（3行）

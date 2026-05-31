@@ -3151,6 +3151,10 @@ async fn rejects_replayed_payment() {
 4. 有料 SSE エンドポイントに session モードで \`tempo request\`、チャネル open / voucher 交換 / 決済をトレース（1.5 時間）。
 5. SDK にない rail（好きな L1 のネイティブ資産）の \`PaymentProvider\` + \`ChargeMethod\` を実装してテスト（4 時間）。
 
+## Expert への接続
+
+ここまでで application 層の endpoint を作った。Expert tier の counterpart は [ペイメントレール工学（決済が製品になる L1 カテゴリ）](/courses/reth-expert-ja/lessons/payment-rail-engineering-ja) — MPP がなぜ protocol として存在するかを駆動する 4 つの category shift（決済保証 / Fee 抽象化 / Identity hook / chain 非依存 surface）を抽出し、Tempo に限らず任意のペイメントレール L1 を読めるようにする。
+
 ## まとめ（3行）
 
 - MPP = HTTP 402 + \`WWW-Authenticate: Payment\` challenge + \`Authorization: Payment\` credential。アカウント不要・API キー不要・rail 非依存で、agent が pay-per-call できる protocol。
