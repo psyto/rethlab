@@ -52,8 +52,8 @@ This is a serious training program — not a casual tutorial.
 | **Reth + Alloy Advanced** | Alloy Provider/Network/Signer at production scale | Reading real `eth_call` paths through Alloy types, custom signer impls |
 | **Reth + Revm Advanced** | Revm interpreter and Database trait, line by line | Reading the actual ADD opcode, custom opcodes, the `Database` interface |
 | **Advanced** | Reth Staged Sync, ExEx, Reth SDK, NodeBuilder for App-chains | Predict / Find-in-repo / Anti-fluency prompts throughout |
-| **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops, **Reth-based chains** (op-stack, alphanet, Tempo) via the extension pattern | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge`, reading op-stack-on-reth and predicting Tempo's node-crate shape |
-| **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | L1: minimal MEV searcher. L2: reorg-aware Postgres indexer via ExEx. L3: custom RPC via `extend_rpc_modules`. L4: wallet backend (signer pool + nonce mgr + replace-on-stuck). L5: EIP-7702 sponsor (Type 4 tx + paymaster). L6: Foundry-style cheatcode (custom precompile + harness). L7: swap aggregator (Revm fork + cross-venue quotes). **L8 Capstone**: frontrun-resistant order router that integrates everything above. L9: cross-client validation harness (validate Revm sims against a production Geth-served provider) |
+| **Expert** | Performance & Systems (MDBX, Tokio, procedural macros, tracing) + Production Engineering (custom precompiles, MPT, stateless, MEV, zkEVM, fork ops, differential fuzzing, EVM privacy, chaos engineering, systems-code auditing, OSS contributor workflow) + **Reth-based chains** (op-stack, alphanet / Tempo / MegaETH case studies, payment-rail engineering as a category) via the extension pattern | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge`, reading op-stack-on-reth, the `tempoxyz/reth` "0 ahead, 1374 behind" compose-don't-fork pattern, and extracting the payment-rail category (settlement assurance / fee abstraction / identity hooks / chain-agnostic surface) from `tempoxyz/tempo` source |
+| **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | L1: minimal MEV searcher. L2: reorg-aware Postgres indexer via ExEx (Tempo's `tidx`). L3: custom RPC via `extend_rpc_modules`. L4: wallet backend (signer pool + nonce mgr + replace-on-stuck). L5: EIP-7702 sponsor (Type 4 tx + paymaster). L6: Foundry-style cheatcode (custom precompile + harness). L7: swap aggregator (Revm fork + cross-venue quotes). **L8 Capstone**: frontrun-resistant order router that integrates everything above. L9: cross-client validation harness (validate Revm sims against a production Geth-served provider). L10: HTTP 402 / MPP machine-payments endpoint (Tempo's machine-to-machine payment protocol, joint-maintained with Stripe) |
 | **Consensus Engineering** | The L1 architect tier — what reading reth doesn't teach. BFT theory (FLP, 3f+1, safety/liveness), real consensus code (reth's `Consensus` trait, Malachite, bera-reth's Proof-of-Liquidity), wiring custom consensus on Reth, validator economics + slashing | M1: BFT problem, 3 families (PoW/PoS/BFT), Ethereum PoS, HotStuff/HyperBFT. M2: reading reth `Consensus`, Malachite, bera-reth. M3: NodeBuilder wiring, minimal single-leader BFT, validator economics |
 | **Cross-Chain Bridges** | The honest accounting of value movement between chains. Trust models, attack history ($2B+ stolen), reading production bridge code (OP Standard, CCIP, Wormhole, IBC), building a minimal light-client-verified bridge on Reth | M1: trust spectrum, light clients (Helios). M2: OP Standard Bridge, Chainlink CCIP, Wormhole + IBC. M3: build a minimal trust-minimized bridge with relayer + light client |
 | **Sequencer & Rollup Architecture** | How modern L2s actually work: centralized vs decentralized sequencers, batch posting and DA, fraud proofs vs ZK proofs, reading op-rbuilder, building a minimal sequencer (~300 lines), decentralization paths to shared sequencers | M1: rollup model, batch posting + EIP-4844 blobs. M2: op-rbuilder, fraud proofs (Cannon) vs validity proofs (SP1). M3: build a minimal sequencer + decentralization paths (PoS sets, shared sequencers like Espresso/Astria) |
@@ -70,17 +70,17 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 
 | rethlab course | openhl module | Lessons | What you ship + highlight |
 | :--- | :--- | :--- | :--- |
-| **Perp Primer** | Step 0: perp mechanics primer | 1 | Standalone primer covering the perpetual-futures mechanics (mark/index price, funding, leverage, liquidation, ADL) underneath the DIY Perp track — read this first if you haven't priced or hedged a perp before |
+| **Perp Primer** | Step 0: perp mechanics primer | 4 | Standalone primer covering the perpetual-futures mechanics (mark/index price, funding, leverage, liquidation, ADL) underneath the DIY Perp track — read this first if you haven't priced or hedged a perp before |
 | **Build OpenHL — Consensus** | Module 1: Consensus substrate | 16 | Real Reth (EVM) + real Malachite (BFT) producing blocks end-to-end. Final lesson: `cargo test first_block_via_engine_actors` runs a single-validator round in ~0.02 s against code you wrote yourself |
 | **Build OpenHL — CLOB** | Module 2: CLOB matching engine | 13 | Pure-state price-time-priority matching engine. Bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into consensus-committed payloads |
 | **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
 | **Build OpenHL — Funding** | Module 4 (partial): Funding state machine | 12 | Deterministic fixed-point funding math (`RATE_SCALE = 1e9` parts-per-billion) gated by an interval clock with no-catch-up semantics. Saturate-not-panic philosophy, balanced-book zero-sum proptest |
-| **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 8 (Stage 10a) | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9). |
+| **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 14 | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Now extended through insurance fund, withdraw-shortfall handling, close-outcome decomposition, and the liquidation scanner. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9); Stages 10b/10c added on top. |
 | **Build OpenHL — ADL** | Module 4 (partial): ADL engine | 5 | Auto-deleveraging safety-net logic on top of liquidation outcomes, including ranking, orchestration, and capstone invariants. |
 
 Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
 
-**Current seed totals: 42 courses, 126 modules, 466 lessons (EN+JA combined).**
+**Current seed totals: 42 published courses, 126 modules, 468 lessons (EN+JA combined; 5 additional Beta courses are seeded but hidden).**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -122,7 +122,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates the full catalog in one shot (currently 42 published courses / 126 modules / 466 lessons combined, plus 5 Beta courses kept hidden until promoted).
+The seeder lives in `prisma/seed.ts` and pulls from generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates the full catalog in one shot (currently 42 published courses / 126 modules / 468 lessons combined, plus 5 Beta courses kept hidden until promoted).
 
 Two pedagogical formats live in those seeds:
 
@@ -187,6 +187,8 @@ rethlab/
 │       ├── check-openhl-cites.ts              # Lint: openhl pin-SHA references
 │       └── check-source-links.ts              # Lint: upstream Reth/Revm source links
 ├── src/
+│   ├── proxy.ts                               # Injects x-pathname header so the root
+│   │                                          #   layout can set <html lang> per route
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages
 │   │   ├── donate/                            # Donation page + thanks/cancel
@@ -234,13 +236,15 @@ OG cards are **dynamic per lesson** — the headline is the actual lesson title,
 
 Each lesson page also emits:
 
+- **`<html lang>`** dynamically set to `ja` for JA-suffixed course/lesson routes, `en` otherwise. Driven by `src/proxy.ts` (Next.js 16 proxy convention, formerly middleware) injecting an `x-pathname` header that the async root layout reads via `headers()`
 - **hreflang** `en` / `ja` / `x-default` so Google serves the right locale per query
-- **JSON-LD** `Article` + `BreadcrumbList` schema so search results can render rich breadcrumbs
-- A **distilled meta description** — stripped of markdown noise (frontmatter, fenced code, headings) and trimmed at a word boundary
-- A **Twitter card** matching the lesson title, not the static site copy
+- **JSON-LD** multi-typed as `["Article", "LearningResource"]` with `image`, `datePublished`, `dateModified`, `educationalLevel`, `learningResourceType`, `publisher.logo`, plus a `BreadcrumbList` for rich breadcrumb rendering
+- A **distilled meta description** — stripped of markdown noise (fenced code, headings, tables) and trimmed at a sentence boundary (EN `.!?` or JA `。！？`) so snippets don't end mid-phrase
+- A **Twitter card** matching the lesson title with a dynamic image alt (`{lesson title} — RethLab`)
 - A **canonical** URL pinned to the locale-correct twin
+- `og:site_name = "RethLab"` and an OG image dynamically generated per lesson by `opengraph-image.tsx`
 
-The sitemap (`/sitemap.xml`) enumerates every published lesson, not just the course catalog, so all 466 lesson URLs are directly discoverable.
+The sitemap (`/sitemap.xml`) enumerates every published lesson with per-entry `<xhtml:link rel="alternate" hreflang>` annotations — all 468 lesson URLs are discoverable, with EN/JA siblings cross-referenced at the sitemap level (belt-and-suspenders alongside page-level hreflang).
 
 Lesson URLs are slug-based (`/courses/<course-slug>/lessons/<lesson-slug>`) and stay valid across content updates, so a link posted today still resolves after the next reseed.
 

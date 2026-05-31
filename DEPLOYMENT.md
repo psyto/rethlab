@@ -82,7 +82,7 @@ The build runs `prisma generate && prisma db push --accept-data-loss && next bui
 
 ## 6. Seed the courses (one-time)
 
-After the first deploy, the database has empty tables. Load the full catalog (currently 42 published courses / 126 modules / 466 lessons combined, with 5 Beta courses seeded but hidden) via the admin endpoint:
+After the first deploy, the database has empty tables. Load the full catalog (currently 42 published courses / 126 modules / 468 lessons combined, with 5 Beta courses seeded but hidden) via the admin endpoint:
 
 ```bash
 curl -X POST "https://rethlab.vercel.app/api/admin/seed?key=$AUTH_SECRET&mode=full"
@@ -128,7 +128,7 @@ Data appears in the Analytics tab after ~24 hours.
 ## 9. Verify SEO
 
 1. **OG preview**: paste a lesson URL (e.g. `https://rethlab.fabrknt.com/courses/reth-beginner-en/lessons/why-rust-ethereum-stack-en`) into <https://cards-dev.twitter.com/validator> — confirm the dynamic per-lesson card renders with the lesson title in the headline.
-2. **Search Console**: <https://search.google.com/search-console> → verify domain (DNS TXT record) → submit `https://rethlab.fabrknt.com/sitemap.xml`. The sitemap enumerates every published lesson, so all ~466 URLs are discoverable in a single submission.
+2. **Search Console**: <https://search.google.com/search-console> → verify domain (DNS TXT record) → submit `https://rethlab.fabrknt.com/sitemap.xml`. The sitemap enumerates every published lesson with per-entry `<xhtml:link rel="alternate" hreflang>` annotations, so all ~468 URLs (and their EN/JA siblings) are discoverable in a single submission.
 3. **Lighthouse**: Chrome DevTools → Lighthouse → run on the production URL. SEO and Best Practices should both score 90+.
 4. **Canonical + hreflang sanity-check**:
    ```bash
