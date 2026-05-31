@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css';
@@ -112,13 +113,20 @@ const structuredData = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Derive lang from URL: /courses/<slug>-ja/... → ja, otherwise en.
+  // Middleware (src/middleware.ts) surfaces the pathname via x-pathname.
+  const h = await headers();
+  const pathname = h.get('x-pathname') ?? '';
+  const isJa = /^\/courses\/[^/]+-ja(\/|$)/.test(pathname);
+  const lang = isJa ? 'ja' : 'en';
+
   return (
-    <html lang="en" className="dark">
+    <html lang={lang} className="dark">
       <head>
         <script
           type="application/ld+json"

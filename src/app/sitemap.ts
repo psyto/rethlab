@@ -20,11 +20,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     select: { slug: true, updatedAt: true },
   });
 
+  // Build hreflang annotations so Google can pair EN/JA siblings at the
+  // sitemap level (belt-and-suspenders alongside the page-level hreflang).
+  const courseAlternates = (slug: string) => {
+    const base = slug.replace(/-(en|ja)$/, '');
+    return {
+      languages: {
+        en: `${root}/courses/${base}-en`,
+        ja: `${root}/courses/${base}-ja`,
+        'x-default': `${root}/courses/${base}-en`,
+      },
+    };
+  };
+
   const coursePages: MetadataRoute.Sitemap = courses.map((course) => ({
     url: `${root}/courses/${course.slug}`,
     lastModified: course.updatedAt,
     changeFrequency: 'monthly',
     priority: 0.8,
+    alternates: courseAlternates(course.slug),
   }));
 
   const lessons = await prisma.lesson.findMany({
@@ -36,11 +50,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   });
 
+  const lessonAlternates = (courseSlug: string, lessonSlug: string) => {
+    const baseCourse = courseSlug.replace(/-(en|ja)$/, '');
+    const baseLesson = lessonSlug.replace(/-(en|ja)$/, '');
+    return {
+      languages: {
+        en: `${root}/courses/${baseCourse}-en/lessons/${baseLesson}-en`,
+        ja: `${root}/courses/${baseCourse}-ja/lessons/${baseLesson}-ja`,
+        'x-default': `${root}/courses/${baseCourse}-en/lessons/${baseLesson}-en`,
+      },
+    };
+  };
+
   const lessonPages: MetadataRoute.Sitemap = lessons.map((lesson) => ({
     url: `${root}/courses/${lesson.module.course.slug}/lessons/${lesson.slug}`,
     lastModified: lesson.updatedAt,
     changeFrequency: 'monthly',
     priority: 0.7,
+    alternates: lessonAlternates(lesson.module.course.slug, lesson.slug),
   }));
 
   return [...staticPages, ...coursePages, ...lessonPages];

@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { prisma } from '@/lib/db';
 
-export const alt = 'RethLab lesson';
+export const alt = 'RethLab — Rust Ethereum Systems Engineering lesson';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
