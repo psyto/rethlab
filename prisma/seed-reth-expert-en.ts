@@ -8,7 +8,7 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
       slug: 'reth-expert-en',
       title: 'Reth Expert — Production Engineering',
       description:
-        'Production engineering at L1 scale. 25 lessons across three modules: Performance & Systems (cargo flamegraph + MDBX + Tokio + proc-macros + tracing) / Production Engineering (custom precompiles + MPT + stateless + MEV + zkEVM + production fork + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS workflow) / Reth-based Chains (library-not-fork + op-stack-on-reth + custom ChainSpec + Executor + PayloadBuilder + Paradigm stack case study + payment-rail engineering). By the end you operate Reth-based chains in production with confidence.',
+        'Production engineering at L1 scale. 25 lessons across three modules: Performance & Systems (cargo flamegraph + MDBX + Tokio + proc-macros + tracing) / Production Engineering (custom precompiles + MPT + stateless + MEV + zkEVM + production fork + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS workflow) / Reth-based Chains (library-not-fork + op-stack-on-reth + custom ChainSpec + Executor + PayloadBuilder + Reth-based L1 case studies (alphanet / Tempo / MegaETH) + payment-rail engineering). By the end you operate Reth-based chains in production with confidence.',
       difficulty: 'EXPERT',
       duration: 485,
       xpReward: 1175,
@@ -3937,13 +3937,13 @@ Then read [op-rbuilder's README](https://github.com/flashbots/op-rbuilder) for t
 `,
                 },
                 {
-                  title: 'Lesson 22 — Case study — Paradigm\'s stack: alphanet, Tempo, and the L1 pattern',
+                  title: 'Lesson 22 — Case study — alphanet, Tempo, MegaETH, and reading Reth-based L1s in the wild',
                   slug: 'paradigm-stack-case-study-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 50,
-                  content: `# Lesson 22 — Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
+                  content: `# Lesson 22 — Case study — alphanet, Tempo, MegaETH, and reading Reth-based L1s in the wild
 
 ## Question
 
@@ -4028,9 +4028,9 @@ What to verify is *absent* (because the SDK lets it be absent):
 - A bespoke EVM implementation (revm is the EVM)
 - A custom networking stack (reth's P2P is reused)
 
-## 5. MegaETH — same pattern, deeper customization
+## 5. MegaETH — same pattern, deeper customization (independent of Paradigm)
 
-If Tempo shows the **shallow end** of the SDK (swap a few components, keep everything else), [\`megaeth-labs\`](https://github.com/megaeth-labs) shows the **deep end**:
+**MegaETH is [\`megaeth-labs\`](https://github.com/megaeth-labs), an independent company — not Paradigm-affiliated.** That's precisely what makes it the strongest comparison case for the extension model: the SDK pattern survives outside Paradigm's own portfolio. If Tempo shows the **shallow end** of the SDK (swap a few components, keep everything else), MegaETH shows the **deep end**:
 
 - **[\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth)** — empty fork (**0 commits ahead, 7666 commits behind**). Same compose-don't-fork pattern as Tempo, just further out of sync.
 - **[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm)** — custom EVM built on revm + op-revm with MegaETH-specific specs (\`EQUIVALENCE\` through \`REX4\`). The sequencer runs JIT/AOT compiled execution via Paradigm's [\`revmc\`](https://github.com/paradigmxyz/revmc).
@@ -4266,7 +4266,7 @@ If you can't hit these without re-reading, the category hasn't fully landed yet 
 ## 📺 Further reading
 
 - L13 (this course) — EVM privacy / Tempo Zones — the privacy slot in the same stack
-- L22 (this course) — Paradigm stack case study — the source deep-read this lesson abstracts from
+- L22 (this course) — alphanet / Tempo / MegaETH case study — the source deep-read this lesson abstracts from
 - Building L3 — \`tidx\` indexer — the data surface that exposes settled state to merchants
 - Building L10 — HTTP 402 / MPP machine-payments endpoint — the practical lab complement
 - [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — protocol; maintained by Tempo Labs + Stripe
@@ -4291,11 +4291,11 @@ If you can't hit these without re-reading, the category hasn't fully landed yet 
 
 ## Question
 
-Final Reth-based Chains quiz: extension pattern + OP-stack + chainspec + executor + payload builder + Paradigm case study.
+Final Reth-based Chains quiz: extension pattern + OP-stack + chainspec + executor + payload builder + Reth-based L1 case studies (alphanet / Tempo / MegaETH).
 
 ## Principle (minimum model)
 
-- Library vs fork + op-stack-on-reth anatomy + ChainSpec + Custom Executor + Custom PayloadBuilder + Paradigm stack patterns.
+- Library vs fork + op-stack-on-reth anatomy + ChainSpec + Custom Executor + Custom PayloadBuilder + Reth-based L1 case studies (alphanet / Tempo / independent MegaETH).
 
 ## Worked example + steps
 

@@ -8,7 +8,7 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       slug: 'reth-expert-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧、ペイメントレール工学)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
+        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Reth ベース L1 ケーススタディ（alphanet / Tempo / MegaETH）、ペイメントレール工学)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
       difficulty: 'EXPERT',
       duration: 485,
       xpReward: 885,
@@ -3215,17 +3215,17 @@ OP Stack 向けの「本物の」本番 builder 参考実装、Bundle merging + 
 `,
                 },
                 {
-                  title: 'レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）',
+                  title: 'レッスン22 — ケーススタディ — alphanet / Tempo / MegaETH と野生の Reth ベース L1 を読む',
                   slug: 'paradigm-stack-case-study-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 50,
-                  content: `# レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）
+                  content: `# レッスン22 — ケーススタディ — alphanet / Tempo / MegaETH と野生の Reth ベース L1 を読む
 
 ## 問い
 
-ここまでで 4 つの拡張スロット（ChainSpec / executor / payload / RPC）+ Reth ベース chain の依存形を見てきた。**Paradigm の全スタックはどう見えるか、Tempo / MegaETH のソースをこのレンズでどう読むか？**
+ここまでで 4 つの拡張スロット（ChainSpec / executor / payload / RPC）+ Reth ベース chain の依存形を見てきた。**Paradigm 自身のスタック（alphanet + Tempo）はどう見えるか、加えて独立系の MegaETH も含めて Reth ベース L1 のソースをこのレンズでどう読むか？**
 
 ## 原理（最小モデル）
 
@@ -3234,7 +3234,7 @@ OP Stack 向けの「本物の」本番 builder 参考実装、Bundle merging + 
 - **alphanet = precompile R&D 遊び場.** OP Stack 互換 testnet、mainnet 実装前の EIP（7212 P-256 / 3074 / 7702）を試す。**「chain に precompile を追加する」最もクリーンな実例**。
 - **Alphanet → 本番への軌跡.** mainnet Ethereum に EIP として graduate / 本番 Reth ベース chain に graduate。Tempo に何が入るかを予測したいなら **最近 alphanet で検証されたもの** を見る。
 - **Tempo（浅い端）.** L1 node crate、3-5 コンポーネント差し替え、残り upstream 継承。\`tempoxyz/reth\` = 0 commits ahead, 1374 commits behind。
-- **MegaETH（深い端）.** カスタム EVM（mega-evm）+ カスタム storage（SALT で MDBX 置換）+ 別 validator binary（stateless-validator）— それでも \`megaeth-labs/reth\` = 0 commits ahead, 7666 commits behind。
+- **MegaETH（深い端 — megaeth-labs、Paradigm 非系列の独立企業）.** カスタム EVM（mega-evm）+ カスタム storage（SALT で MDBX 置換）+ 別 validator binary（stateless-validator）— それでも \`megaeth-labs/reth\` = 0 commits ahead, 7666 commits behind。**Paradigm の portfolio 外でも extension model が成立** することの最強の証拠。
 - **SDK はカスタマイズの深さを制約しない.** Tempo 浅、MegaETH 深、両方とも reth fork なし。
 
 ## 具体例
@@ -3531,7 +3531,7 @@ reading test: [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/
 ## 📺 さらに読む
 
 - L13（本コース） — EVM プライバシー / Tempo Zones — 同じスタックのプライバシー slot
-- L22（本コース） — Paradigm スタックケーススタディ — 本レッスンが抽象化したソース深読み
+- L22（本コース） — alphanet / Tempo / MegaETH ケーススタディ — 本レッスンが抽象化したソース深読み
 - Building L3 — \`tidx\` indexer — 決済済み状態をマーチャントに露出するデータ surface
 - Building L10 — HTTP 402 / MPP machine-payments endpoint — 実装ラボの相補
 - [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — protocol、Tempo Labs + Stripe 共同 maintainer
@@ -3556,7 +3556,7 @@ reading test: [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/
 
 拡張パターン総まとめ。
 
-レッスン17-22 を通じて: Extension model（fork ではなくライブラリ）/ op-stack-on-reth 解剖 / Custom ChainSpec / Custom executor / Custom payload builder / Paradigm スタックケーススタディ の構造的事実を確認する。
+レッスン17-22 を通じて: Extension model（fork ではなくライブラリ）/ op-stack-on-reth 解剖 / Custom ChainSpec / Custom executor / Custom payload builder / alphanet / Tempo / MegaETH ケーススタディ の構造的事実を確認する。
 `,
                   quizQuestions: [
                     {
