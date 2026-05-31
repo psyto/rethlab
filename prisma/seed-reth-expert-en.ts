@@ -8,10 +8,10 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
       slug: 'reth-expert-en',
       title: 'Reth Expert — Production Engineering',
       description:
-        'Production engineering at L1 scale. 24 lessons across three modules: Performance & Systems (cargo flamegraph + MDBX + Tokio + proc-macros + tracing) / Production Engineering (custom precompiles + MPT + stateless + MEV + zkEVM + production fork + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS workflow) / Reth-based Chains (library-not-fork + op-stack-on-reth + custom ChainSpec + Executor + PayloadBuilder + Paradigm stack case study). By the end you operate Reth-based chains in production with confidence.',
+        'Production engineering at L1 scale. 25 lessons across three modules: Performance & Systems (cargo flamegraph + MDBX + Tokio + proc-macros + tracing) / Production Engineering (custom precompiles + MPT + stateless + MEV + zkEVM + production fork + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS workflow) / Reth-based Chains (library-not-fork + op-stack-on-reth + custom ChainSpec + Executor + PayloadBuilder + Paradigm stack case study + payment-rail engineering). By the end you operate Reth-based chains in production with confidence.',
       difficulty: 'EXPERT',
-      duration: 457,
-      xpReward: 1105,
+      duration: 485,
+      xpReward: 1175,
       track: 'reth-expert',
       tags,
       isPublished: true,
@@ -4088,10 +4088,203 @@ If you've never read alphanet end-to-end, do that first as practice — it's sma
 `,
                 },
                 {
+                  title: 'Lesson 23 — Payment-rail engineering — the L1 category when settlement is the product',
+                  slug: 'payment-rail-engineering-en',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 28,
+                  xpReward: 70,
+                  content: `# Lesson 23 — Payment-rail engineering — the L1 category when settlement is the product
+
+## Question
+
+Build a payment rail you'd run for Stripe or Meta. Concretely — in chainspec, executor, precompiles, indexer — what's different from an L1 you'd run for traders?
+
+Most engineers, after L22, can read [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) as "Reth + customizations." This lesson asks the prior question: **what are the customizations FOR?** Once you can name the four category shifts and verify each in source, you can read any payment-rail L1 — Tempo, the next one after Tempo — by inspection, not by tour guide.
+
+## Principle (minimum model)
+
+A payment-rail L1 makes four shifts vs general-purpose:
+
+1. **Settlement assurance > throughput.** Reversibility, dispute window, attestation of finality. Throughput matters only after these. (Stripe charges back; what does an L1 do?)
+2. **Fee abstraction > fee bidding.** The merchant pays a predictable fee in fiat-equivalent; the user pays zero. Implemented via paymasters, sponsor relationships, and protocol-level fee bundling. (MPP HTTP-402 makes the payment itself the negotiation surface.)
+3. **Identity hooks > pseudonymity.** Compliance, KYC, sanctions, regulated-asset gates are first-class. Pseudonymity is opt-in within the rail, not the default. (Tempo's TIPs — [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) — specify these as protocol concerns, not application concerns.)
+4. **Chain-agnostic surface > chain-specific UX.** The payment protocol is payment-method-agnostic; the chain is one implementation. Stripe / ACH / Tempo all sit behind the same MPP interface. ([\`tempoxyz/mpp-specs/specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) is where each network plugs in.)
+
+Three data points (so this is a category, not a Tempo lesson):
+- **Tempo** — Stripe's chain-abstraction rail. Reth-as-library + MPP + Zones + TIPs.
+- **Hyperliquid USDC bridge** — settlement layer feeding HL perp positions. Bridge does the assurance + identity work; HL core does throughput.
+- **Base USDC + Coinbase Pay** — consumer wallet rail. Base does throughput; Coinbase does identity + fee abstraction at the wallet layer.
+
+The four shifts surface differently across these — Tempo bundles all four into the L1; HL splits assurance into the bridge; Base splits fees into the wallet. **Same shifts, different placement.** That's the test: if you can locate the four shifts somewhere in each stack, you've found a payment rail.
+
+## 1. Setting the question right
+
+Look at L22's [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) data point: 0 commits ahead, 1374 behind upstream. They didn't fork; they composed. **That answers "how" but not "why."** Why customize at all? What does a payment rail need that general-purpose Reth doesn't already provide?
+
+The cheap answer — "regulatory compliance" — is incomplete. Regulatory compliance is *one* shift (identity hooks). The other three are technical patterns that exist whether or not a regulator is looking. A self-custodial USDC settlement rail with zero KYC still needs settlement assurance, fee abstraction, and chain-agnostic surface to be a payment rail rather than just an L1.
+
+> 🛑 **Predict.** Before reading the four shifts in detail, write down: what would happen if you tried to use vanilla Reth (no customizations) as the L1 for Stripe? Three concrete failures, not "it wouldn't work."
+
+## 2. Shift 1 — Settlement assurance > throughput
+
+What "settled" means on a general-purpose L1: tx is in the chain, ≥ N confirmations. That's it. No reversibility primitive, no chargeback, no dispute window.
+
+What "settled" means on a payment rail:
+- **Finality with reversibility window.** A dispute period during which a payment can be reversed by mutual consent or by an attestor. Most general-purpose chains have no such concept; the payment-rail L1 either bakes it into protocol (Tempo's approach in [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips)) or pushes it to the application layer (the HL bridge model).
+- **Attestation of finality.** Stripe doesn't tell a merchant "your funds are confirmed" — it tells them "your funds are *settled*, irreversible." A payment-rail L1 must distinguish included from final from settled. General-purpose L1s collapse all three into "confirmations."
+- **Chargeback model.** Either protocol-level (mutual-consent reversal precompile) or application-level (escrow + dispute attestor). Without one, the rail can't serve consumer payments — only B2B.
+
+The implementation surface this lands on:
+- Custom **precompile** for attestation / reversal (executor layer)
+- Custom **transaction type** for reversible payments (chainspec layer)
+- Custom **RPC namespace** (\`tempo_*\`) exposing settlement state distinct from inclusion state
+
+Find in [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo): look in [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) for the protocol-level definitions; look in [\`crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates) for the precompile implementing them.
+
+> 🛑 **Predict.** Where in vanilla Reth would you go to add a "settlement attestation" precompile? Name the trait, the slot, and what \`NodeBuilder\` method you'd call. If you can't answer, re-read L20 (Custom Executor).
+
+## 3. Shift 2 — Fee abstraction > fee bidding
+
+General-purpose chains: user signs a tx, pays gas in native asset, fee is a bid in a public mempool.
+
+Payment rails: the user signs an *intent*; the merchant or rail operator pays the fee in fiat-equivalent; the chain executes deterministically with a known per-tx cost.
+
+Two implementation layers:
+
+1. **Paymaster pattern** (EIP-7702 + ERC-4337) — wallet-level sponsorship; the rail relays. Building tier L5 (\`build-7702-sponsor\`) covers this end to end.
+2. **MPP HTTP-402** — protocol-level. The payment itself is the HTTP authentication negotiation. From [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs):
+
+\`\`\`
+Client → GET /resource
+Server → 402 Payment Required + WWW-Authenticate: Payment
+Client → fulfills payment
+Client → GET /resource + Authorization: Payment <credential>
+\`\`\`
+
+[\`specs/core\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) defines HTTP semantics; [\`specs/intents\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) defines the payment patterns (charge, authorize, subscription); [\`specs/methods\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) defines how Tempo / Stripe / ACH each fulfill an intent.
+
+The crucial part: **MPP is maintained jointly by Tempo Labs and Stripe.** That's not partnership marketing — it's a structural fact. The protocol abstracts whether settlement happens on a Tempo chain, on Stripe's fiat rails, or on ACH. A merchant integrating MPP doesn't pick the rail; the rail picks itself based on the intent + cost.
+
+> 🔍 **Find in repo.** Open [\`tempoxyz/mpp-specs/specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents). Name the intent types and explain in one sentence each. Then open [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) — how many concrete payment methods are specified, and what's the shape of a method spec?
+
+## 4. Shift 3 — Identity hooks > pseudonymity
+
+General-purpose chains: addresses are anonymous by default; KYC happens at the off-ramp (CEX or bridge).
+
+Payment rails: identity is a protocol concern. Some addresses are attested-individual, some are attested-business, some are anonymous. Different transactions interact differently based on these attestations.
+
+The protocol surface — three patterns observed:
+
+- **Compliance precompile.** A precompile that takes an address and returns its attestation state. Cheap to call; smart contracts gate on it. Tempo's [\`tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) directory is where these are specified.
+- **Attestation as a separate identity chain.** Worldcoin pattern — identity lives on its own chain, accessed via cross-chain message.
+- **Bridge-level KYC.** Hyperliquid pattern — KYC happens at the USDC deposit bridge; the chain itself stays pseudonymous post-deposit.
+
+Reading test: open [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips). Find a TIP that addresses identity, attestation, or compliance. Map it to: which crate would implement it, and which \`NodeBuilder\` slot would wire it in?
+
+## 5. Shift 4 — Chain-agnostic surface > chain-specific UX
+
+The biggest shift, and the one most engineers miss: **the payment rail's public interface is the payment protocol, not the chain.**
+
+A user, an agent, a merchant interact with MPP. They don't pick "I want my payment on Tempo." They get a 402, fulfill it, and the protocol routes through whichever method satisfies the intent — chain, ACH, card, whatever.
+
+What this means architecturally:
+- The chain is one method among several.
+- The chain's UX (gas, nonces, RPC, bridging) is hidden by the protocol layer.
+- The chain can be swapped (add Solana method, deprecate ACH method) without changing the merchant integration.
+
+Compare to a general-purpose L1: the chain *is* the interface. RPCs, wallets, gas estimation, block explorers — the user is on the chain.
+
+This is the "Stripe of crypto" thesis in code, not in marketing: Stripe's value isn't being a payment processor; it's making the underlying payment method an implementation detail. MPP does the same for chains.
+
+> 🛑 **Predict.** If MPP's payment-method abstraction is correct, what's the relationship between a payment rail's revenue and the chain's transaction volume? Sketch this in two sentences before continuing.
+
+(Answer: weak coupling. A rail can grow MPP volume without on-chain volume growing — payments may settle via faster methods. This is precisely the inverse of an L1's economics. **The rail isn't betting on the chain being the dominant settlement method.**)
+
+## 6. Worked example — one settled payment, end to end
+
+Trace a hypothetical $0.05 API-access payment via MPP, settled on Tempo:
+
+1. **Client → Server.** \`GET /api/v1/premium-feature\` (an agent buying premium API access).
+2. **Server → Client.** \`HTTP/1.1 402 Payment Required\` + \`WWW-Authenticate: Payment realm="api.example.com" method="mpp"\` + intent specification (charge, $0.05, currency USD).
+3. **Client → MPP method resolver.** Picks Tempo as the rail (lowest cost for the intent).
+4. **Client → Tempo wallet / paymaster.** Constructs the on-chain payment: a single tx that transfers $0.05 worth of USD-stable on Tempo, with the merchant address derived from the intent.
+5. **Tempo chain.** Tx executes through Tempo's custom executor. The settlement-attestation precompile fires, recording the payment in a settled state. The identity TIP hook checks both addresses; both pass.
+6. **\`tidx\` indexer.** Surfaces the settlement event to the merchant within ~1s (OLTP path).
+7. **Client → Server.** \`GET /api/v1/premium-feature\` + \`Authorization: Payment <credential>\` (credential references the settled tx hash).
+8. **Server.** Validates the credential against the MPP method's settled-state RPC; serves the resource.
+
+Every step maps to a concrete file path or RPC call you can find in source:
+
+| Step | Where it lives |
+| :--- | :--- |
+| 2 — 402 + WWW-Authenticate | [\`tempoxyz/mpp-specs/specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) |
+| 3 — method resolution | [\`tempoxyz/mpp-specs/specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) |
+| 4 — Tempo payment tx | [\`tempoxyz/tempo/crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates) (executor + precompile) |
+| 5 — settlement attestation | TIP definition in [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips) + precompile in [\`crates/\`](https://github.com/tempoxyz/tempo/tree/main/crates) |
+| 5 — identity TIP hook | TIP definition + chainspec wiring |
+| 6 — settled state surfaced | [\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx) (covered in Building L3) |
+| 7 — Authorization header | [\`tempoxyz/mpp-specs/specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) |
+| 8 — credential validation | merchant-side library, but uses an RPC endpoint on the Tempo node |
+
+**No step is magic.** Every step is in public source. The lesson of the table: a payment rail is the *composition* of these surfaces, not any one of them alone. Without all four shifts wired, the rail doesn't run.
+
+## 7. Anti-fluency — why "just use a fast L1" doesn't close the gap
+
+A reasonable engineer hearing the four shifts might think: most of these are application-layer concerns. Use Solana for throughput, add a paymaster contract for fee abstraction, use Circle's CCTP for cross-chain. Why does a payment rail need to be a category at all?
+
+The answer is in how the shifts compose, not in any one shift. A fast L1 + bolt-on paymaster + bridge gets you:
+
+- Settlement assurance: **still missing** — Solana has no reversibility primitive. A bolt-on can't add it without changing tx semantics chain-wide.
+- Identity hooks: **fragmented** — KYC at the bridge only catches deposits, not in-chain transfers. Inconsistent attestation surface for contracts.
+- Chain-agnostic surface: **inverted** — Solana is the public surface; users pick it, wallets target it, RPCs are Solana-shaped. MPP cannot abstract it without major adaptation.
+- Fee abstraction: **mostly works** with a paymaster, modulo each chain having different paymaster semantics. This is the only shift a bolt-on partially solves.
+
+The four shifts are **load-bearing as a system**, not as individual features. The payment-rail L1 category exists because the four shifts are cheaper to provide bundled at the chain layer than to retrofit onto a general-purpose L1.
+
+This is the same shape as "why not just use Linux for embedded?" The answer isn't that Linux can't do it; it's that the integration cost of retrofitting an RTOS's guarantees onto general-purpose Linux is higher than building a purpose-built system. **Tempo is to Solana what QNX is to Linux** — same conceptual move, applied to settlement.
+
+## Drill
+
+Choose 2 of 4. Each is ~30 minutes of source reading; output is a short written deliverable.
+
+1. **Find the settlement-attestation surface in Tempo.** Open [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) and locate the crates that implement settlement attestation (Shift 1). Identify (a) the TIP that defines it, (b) the precompile or transaction-type implementation, (c) where it gets wired into the executor / chainspec. Write 5 lines mapping these to file paths.
+2. **Read all intent types in MPP.** Open [\`tempoxyz/mpp-specs/specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents). Read each intent spec. Write one sentence per intent explaining what it does and what makes it different from a generic chain tx. Then write one paragraph on why MPP defines these as protocol concerns rather than leaving them to applications.
+3. **Locate identity hooks in Tempo.** Open [\`tempoxyz/tempo/tips/\`](https://github.com/tempoxyz/tempo/tree/main/tips). Find the TIP(s) addressing identity, attestation, or compliance. For each, name (a) what state it specifies, (b) which crate likely implements it, (c) which existing Reth trait its implementation would extend.
+4. **Map an existing payment rail (not Tempo) to the four shifts.** Pick Hyperliquid USDC, Base USDC + Coinbase Pay, or Solana Pay. For each of the four shifts, write 2–3 sentences locating where that shift happens in the stack (or noting that it doesn't). Compare your map to Tempo's. The deliverable is one page.
+
+## Pass criteria
+
+- Name the four shifts in one sentence each, from memory, in any order.
+- For each shift, identify which Reth extension slot (chainspec / executor / precompile / payload builder / RPC namespace) is its primary implementation surface.
+- Articulate, in 2–3 sentences, why "just use a fast L1 + paymaster" doesn't reproduce a payment rail.
+- Identify the four shifts somewhere in at least one non-Tempo payment rail (HL bridge or Base USDC + Coinbase Pay).
+- For the worked example, name the file path or RPC for at least 5 of the 8 steps without looking at the table.
+
+If you can't hit these without re-reading, the category hasn't fully landed yet — revisit section 1 and the worked example.
+
+## 📺 Further reading
+
+- L13 (this course) — EVM privacy / Tempo Zones — the privacy slot in the same stack
+- L22 (this course) — Paradigm stack case study — the source deep-read this lesson abstracts from
+- Building L3 — \`tidx\` indexer — the data surface that exposes settled state to merchants
+- Building L10 — HTTP 402 / MPP machine-payments endpoint — the practical lab complement
+- [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — protocol; maintained by Tempo Labs + Stripe
+- [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — node + TIPs
+- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — privacy anchored to the rail
+
+## Summary (3 lines)
+
+- Four category shifts make an L1 a payment rail: settlement assurance > throughput, fee abstraction > fee bidding, identity hooks > pseudonymity, chain-agnostic surface > chain-specific UX.
+- Each shift maps to a specific Reth extension slot. The shifts compose; you cannot retrofit them onto a general-purpose L1 with bolt-ons. The MPP protocol (maintained by Tempo + Stripe) is the chain-agnostic surface for the category.
+- The same four shifts surface in other rails (HL USDC bridge, Base + Coinbase Pay) — same shifts, different placement. **A payment rail is identifiable by where the four shifts live, not by which company runs it.**
+`,
+                },
+                {
                   title: 'Quiz — Reth Chains',
                   slug: 'reth-chains-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 50,
                   content: `# Quiz — Reth Chains
