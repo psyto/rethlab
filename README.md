@@ -66,6 +66,8 @@ This is a serious training program — not a casual tutorial.
 
 [`psyto/openhl`](https://github.com/psyto/openhl) is the **open-source implementation of Hyperliquid** (a reference implementation, not THE Hyperliquid): a Rust workspace that wires real Reth (EVM execution) into real Malachite (BFT consensus) and adds three pure state-machine subsystems on top — a CLOB matching engine, funding/oracle/liquidation, and a protocol-native vault primitive. The CL/EL boundary is exactly four messages (`build_payload`, `payload_ready`, `validate_payload`, `commit`); the state machines are I/O-free and deterministic, validated by proptest at microseconds per case. See the [openhl architecture doc](https://github.com/psyto/openhl/blob/main/docs/architecture.md) for the full design.
 
+**Where openhl lives now.** Active openhl development moved into [`psyto/rdk`](https://github.com/psyto/rdk) (Reth DeFi Kit) — a monorepo where the shared DeFi primitives (CLOB, funding, vault, liquidation, clearing, oracle) live under `rdk/crates/` and ship as the substrate for both `rdk/openhl/` (Perp DEX) and `rdk/princeps/` (prime broker L1). The standalone `psyto/openhl` repo is **preserved as the immutable citation snapshot** for the DIY Perp track — every Stage SHA and `path/file.rs:N@SHA` cite in the build-along courses pins to commits in that repo, so the answer-key diffs stay byte-identical across reseeds.
+
 The DIY Perp track in rethlab is the **build-along course series** for openhl. You start from `cargo init` on an empty directory and progress through **Step 0 → Step 6** (`Perp Primer → Consensus → CLOB → Precompiles → Funding → Liquidation → ADL`), with openhl as the byte-identical answer key — each lesson pins to a specific openhl commit SHA and ends with `git diff` against that revision as the verification step.
 
 | rethlab course | openhl module | Lessons | What you ship + highlight |
@@ -78,7 +80,7 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 | **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 14 | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Now extended through insurance fund, withdraw-shortfall handling, close-outcome decomposition, and the liquidation scanner. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9); Stages 10b/10c added on top. |
 | **Build OpenHL — ADL** | Module 4 (partial): ADL engine | 5 | Auto-deleveraging safety-net logic on top of liquidation outcomes, including ranking, orchestration, and capstone invariants. |
 
-Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
+Module 4 oracle integration and Module 5 vault primitive are still work-in-progress upstream (now in `rdk/`) — the matching rethlab courses land when the reference code stabilizes and a citation snapshot is cut back into `psyto/openhl`.
 
 **Current seed totals: 42 published courses, 126 modules, 468 lessons (EN+JA combined; 5 additional Beta courses are seeded but hidden).**
 

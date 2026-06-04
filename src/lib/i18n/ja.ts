@@ -136,9 +136,10 @@ export const ja: TranslationKeys = {
     },
     diyPerpSeries: {
       title: 'DIY Perp シリーズについて',
-      intro: 'Hyperliquidの実装スタックはクローズドソースです。`psyto/openhl` は、その設計思想を学ぶためのオープンな参照実装で、Reth（EVM）とMalachite（BFT）を同一Rust workspaceで接続し、CLOB・Funding・Vaultを決定的なstate machineとして構成しています。',
+      intro: 'Hyperliquidの実装スタックはクローズドソースです。`psyto/openhl` は、その設計思想を学ぶためのオープンな参照実装で、Reth（EVM）とMalachite（BFT）を同一Rust workspaceで接続し、CLOB・Funding・Vaultを決定的なstate machineとして構成しています。現在 openhl の active な開発は `psyto/rdk`（Reth DeFi Kit）に移り、同じ substrate を共有する princeps（prime-broker L1）と同居しています。standalone の `psyto/openhl` レポは、DIY Perp の各レッスンが pin する commit を保持する immutable な citation snapshot として保存されています。',
       mapping: 'DIY Perp シリーズは openhl の build-along コースです。`cargo init` から始め、Consensus → CLOB → Precompiles → Funding → Liquidation を順に実装します。各レッスンは特定の commit SHA に対応し、`git diff` で答え合わせできます。',
-      openhlLinkText: 'psyto/openhl',
+      openhlLinkText: 'psyto/openhl（citation snapshot）',
+      rdkLinkText: 'psyto/rdk（active dev）→',
       architectureLinkText: 'アーキテクチャ概要 →',
     },
     catalog: {

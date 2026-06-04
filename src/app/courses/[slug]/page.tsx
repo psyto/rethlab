@@ -172,6 +172,14 @@ export default function CourseDetailPage() {
                     {t('courses.diyPerpSeries.openhlLinkText')}
                   </a>
                   <a
+                    href="https://github.com/psyto/rdk"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-400 hover:underline"
+                  >
+                    {t('courses.diyPerpSeries.rdkLinkText')}
+                  </a>
+                  <a
                     href="https://github.com/psyto/openhl/blob/main/docs/architecture.md"
                     target="_blank"
                     rel="noopener noreferrer"

@@ -140,9 +140,10 @@ export const en = {
     },
     diyPerpSeries: {
       title: 'About the DIY Perp series',
-      intro: 'Hyperliquid is the largest perpetual DEX by volume, and its entire stack (HyperBFT consensus, HyperCore matching engine, HyperEVM execution) is closed source. `psyto/openhl` is the open reference implementation — a Rust workspace that wires real Reth (EVM) into real Malachite (BFT) and adds pure-state CLOB, funding, and vault subsystems on top. The CL/EL boundary is just four messages; the state machines are I/O-free and deterministic.',
+      intro: 'Hyperliquid is the largest perpetual DEX by volume, and its entire stack (HyperBFT consensus, HyperCore matching engine, HyperEVM execution) is closed source. `psyto/openhl` is the open reference implementation — a Rust workspace that wires real Reth (EVM) into real Malachite (BFT) and adds pure-state CLOB, funding, and vault subsystems on top. The CL/EL boundary is just four messages; the state machines are I/O-free and deterministic. Active openhl development now lives inside `psyto/rdk` (Reth DeFi Kit) alongside princeps (a prime-broker L1 sharing the same substrate); the standalone `psyto/openhl` repo is preserved as the immutable citation snapshot that every DIY Perp lesson pins to.',
       mapping: 'The DIY Perp series is the build-along course track for openhl. You start from `cargo init` on an empty directory and reach a runnable open-source implementation of Hyperliquid over five courses — Consensus → CLOB → Precompiles → Funding → Liquidation — with openhl pinned to specific commit SHAs as the byte-identical answer key for each lesson.',
-      openhlLinkText: 'psyto/openhl',
+      openhlLinkText: 'psyto/openhl (citation snapshot)',
+      rdkLinkText: 'psyto/rdk (active dev) →',
       architectureLinkText: 'Architecture overview →',
     },
     difficulty: {
