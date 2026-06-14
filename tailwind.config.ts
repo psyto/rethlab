@@ -44,15 +44,22 @@ const config: Config = {
           foreground: 'hsl(var(--card-foreground))',
         },
         fabrknt: {
-          cyan: '#f97316',
-          'cyan-light': '#fb923c',
-          orange: '#f97316',
-          'orange-light': '#fb923c',
-          dark: '#050505',
-          surface: '#0d0d0e',
-          elevated: '#161618',
-          muted: '#8a8580',
-          dim: '#3a3633',
+          cyan: '#00f0ff',
+          'cyan-light': '#5cffff',
+          magenta: '#ff00aa',
+          'magenta-light': '#ff5cc8',
+          yellow: '#facc15',
+          crit: '#ff3b3b',
+          /* Aliases retained for backward compatibility with existing call sites
+             that still reference orange/orange-light. New code should use the
+             cyan/magenta tokens above. */
+          orange: '#00f0ff',
+          'orange-light': '#5cffff',
+          dark: '#050507',
+          surface: '#0b0b12',
+          elevated: '#14141e',
+          muted: '#9ca3af',
+          dim: '#4b5563',
         },
         xp: {
           bronze: '#CD7F32',
@@ -67,8 +74,8 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       backgroundImage: {
-        'fabrknt-gradient': 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)',
-        'fabrknt-gradient-subtle': 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(251,146,60,0.08) 100%)',
+        'fabrknt-gradient': 'linear-gradient(135deg, #00f0ff 0%, #ff00aa 100%)',
+        'fabrknt-gradient-subtle': 'linear-gradient(135deg, rgba(0,240,255,0.08) 0%, rgba(255,0,170,0.08) 100%)',
       },
       keyframes: {
         'xp-fill': {

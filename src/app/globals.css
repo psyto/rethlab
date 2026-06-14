@@ -4,50 +4,55 @@
 
 @layer base {
   :root {
-    /* RethLab palette — Rust orange on dark, Ferris-inspired */
-    --bg-primary: #050505;
-    --bg-surface: #0d0d0e;
-    --bg-elevated: #161618;
-    --fg-primary: #e7e5e4;
-    --fg-muted: #8a8580;
-    --fg-dim: #3a3633;
-    --accent-orange: #f97316;
-    --accent-orange-light: #fb923c;
-    --accent-glow: rgba(249, 115, 22, 0.18);
-    --accent-red: #ef4444;
-    --accent-yellow: #eab308;
-    --accent-blue: #3b82f6;
-    --border-hex: #2a2520;
-    --border-subtle: #1a1814;
+    /* Tokyo 2042 / Failsafe Universe palette
+       Variable NAMES are preserved from the prior RethLab palette so existing
+       component references keep working; only the VALUES move from
+       Rust-orange to Failsafe cyan + magenta + yellow + crit. */
+    --bg-primary: #050507;
+    --bg-surface: #0b0b12;
+    --bg-elevated: #14141e;
+    --fg-primary: #e5e7eb;
+    --fg-muted: #9ca3af;
+    --fg-dim: #4b5563;
+    --accent-orange: #00f0ff;
+    --accent-orange-light: #5cffff;
+    --accent-glow: rgba(0, 240, 255, 0.20);
+    --accent-magenta: #ff00aa;
+    --accent-magenta-glow: rgba(255, 0, 170, 0.20);
+    --accent-yellow: #facc15;
+    --accent-red: #ff3b3b;
+    --accent-crit: #ff3b3b;
+    --border-hex: #14141e;
+    --border-subtle: #0d0d14;
 
     /* Tailwind semantic tokens (HSL) */
-    --background: 0 0% 2%;             /* #050505 */
-    --foreground: 30 8% 90%;           /* #e7e5e4 */
+    --background: 240 17% 3%;          /* #050507 */
+    --foreground: 220 9% 91%;          /* #e5e7eb */
 
-    --card: 30 7% 7%;                  /* #0d0d0e */
-    --card-foreground: 30 8% 90%;
+    --card: 240 21% 6%;                /* #0b0b12 */
+    --card-foreground: 220 9% 91%;
 
-    --popover: 30 7% 7%;
-    --popover-foreground: 30 8% 90%;
+    --popover: 240 21% 6%;
+    --popover-foreground: 220 9% 91%;
 
-    --primary: 24 95% 53%;             /* #f97316 — Rust orange */
-    --primary-foreground: 0 0% 2%;
+    --primary: 186 100% 50%;           /* #00f0ff — Failsafe cyan */
+    --primary-foreground: 240 17% 3%;
 
-    --secondary: 30 7% 9%;             /* #161618 */
-    --secondary-foreground: 30 8% 90%;
+    --secondary: 240 18% 10%;          /* #14141e */
+    --secondary-foreground: 220 9% 91%;
 
-    --muted: 30 7% 9%;
-    --muted-foreground: 30 8% 53%;     /* #8a8580 */
+    --muted: 240 18% 10%;
+    --muted-foreground: 220 9% 64%;
 
-    --accent: 24 95% 53%;
-    --accent-foreground: 0 0% 2%;
+    --accent: 186 100% 50%;
+    --accent-foreground: 240 17% 3%;
 
-    --destructive: 0 84% 60%;          /* #ef4444 */
-    --destructive-foreground: 30 8% 90%;
+    --destructive: 0 100% 62%;         /* #ff3b3b */
+    --destructive-foreground: 220 9% 91%;
 
-    --border: 30 12% 15%;              /* #2a2520 */
-    --input: 30 12% 15%;
-    --ring: 24 95% 53%;
+    --border: 240 18% 10%;             /* #14141e */
+    --input: 240 18% 10%;
+    --ring: 186 100% 50%;
 
     --radius: 0.5rem;
   }
@@ -60,7 +65,13 @@
   body {
     background: var(--bg-primary);
     color: var(--fg-primary);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--accent-orange);
+    color: #000;
   }
 }
 
@@ -71,9 +82,9 @@ pre code { white-space: pre; }
 /* Code editor overrides */
 .monaco-editor { border-radius: var(--radius); }
 
-/* RethLab gradient text — Rust orange */
+/* Brand gradient — cyan → magenta (used across hero / XP bar / accents) */
 .text-fabrknt-gradient {
-  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+  background: linear-gradient(135deg, #00f0ff 0%, #ff00aa 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -81,38 +92,98 @@ pre code { white-space: pre; }
 
 /* XP progress bar */
 .xp-bar {
-  background: linear-gradient(90deg, #f97316, #fb923c);
+  background: linear-gradient(90deg, #00f0ff, #ff00aa);
   transition: width 0.8s ease-out;
 }
 
-/* Glow effects */
+/* Glow effects (kept under existing names for backwards compat — values updated) */
 .glow-cyan {
-  box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(249, 115, 22, 0.05);
+  box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(0, 240, 255, 0.05);
 }
 .glow-cyan-subtle {
-  box-shadow: 0 0 12px rgba(249, 115, 22, 0.08);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.08);
 }
 
-/* Reth-style tile background pattern */
-.bg-reth-tiles {
-  background-color: #050505;
+/* Failsafe-canonical text glow utilities */
+.glow-cyan-text {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6), 0 0 24px rgba(0, 240, 255, 0.25);
+}
+.glow-magenta {
+  text-shadow: 0 0 8px rgba(255, 0, 170, 0.6), 0 0 24px rgba(255, 0, 170, 0.25);
+}
+.glow-crit {
+  text-shadow: 0 0 8px rgba(255, 59, 59, 0.7), 0 0 24px rgba(255, 59, 59, 0.3);
+}
+
+/* Failsafe-canonical border glows */
+.border-glow-cyan {
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.35), 0 0 24px rgba(0, 240, 255, 0.18) inset;
+}
+.border-glow-crit {
+  box-shadow: 0 0 0 1px rgba(255, 59, 59, 0.45), 0 0 24px rgba(255, 59, 59, 0.2) inset;
+}
+
+/* Scanline overlay (Tokyo 2042 archive terminal feel) */
+.scanline::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 2px,
+    rgba(255, 255, 255, 0.012) 3px,
+    rgba(255, 255, 255, 0) 4px
+  );
+  z-index: 50;
+}
+
+/* Grid background */
+.grid-bg {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 56px 56px;
-  background-position: -1px -1px;
+    linear-gradient(to right, var(--border-hex) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-hex) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
-/* Reth-style "chip" card with corner screws */
+/* Pulse dot indicator (LIVE / archive-active) */
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+/* Entrance animation */
+.fade-in-up {
+  animation: fade-in-up 280ms ease-out both;
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Flicker (cascade / crit moments) */
+.flicker {
+  animation: flicker 220ms steps(2, end) 3;
+}
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Reth-style "chip" card — recolored neon-cyan-on-dark */
 .reth-chip {
   position: relative;
-  background: linear-gradient(180deg, #1a1814 0%, #0f0d0a 100%);
-  border: 1px solid #2a2520;
+  background: linear-gradient(180deg, #0b0b12 0%, #050507 100%);
+  border: 1px solid #14141e;
   border-radius: 18px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 20px 60px rgba(0, 0, 0, 0.6),
-    0 0 80px rgba(249, 115, 22, 0.06);
+    0 0 80px rgba(0, 240, 255, 0.06);
 }
 .reth-chip::before,
 .reth-chip::after,
@@ -135,9 +206,9 @@ pre code { white-space: pre; }
 .reth-chip::before,
 .reth-chip::after { display: none; }
 
-/* Streak fire glow */
+/* Streak glow — repurposed to magenta (cyberpunk fire vs neon) */
 .streak-glow {
-  text-shadow: 0 0 10px rgba(255, 165, 0, 0.5), 0 0 20px rgba(255, 165, 0, 0.3);
+  text-shadow: 0 0 10px rgba(255, 0, 170, 0.5), 0 0 20px rgba(255, 0, 170, 0.3);
 }
 
 /* Scrollbar */
@@ -148,7 +219,8 @@ pre code { white-space: pre; }
 
 /* ============================================================
    Code block syntax highlighting (rehype-highlight + highlight.js)
-   Brand-tuned to match the hero code snippet on the home page.
+   Re-tuned to the Failsafe palette — cyan keywords, magenta for
+   meta/decorators, yellow strings, the rest neutral.
    ============================================================ */
 
 .hljs {
@@ -156,23 +228,18 @@ pre code { white-space: pre; }
   background: transparent;
 }
 
-/* Comments — muted gray */
 .hljs-comment,
 .hljs-quote {
   color: var(--fg-muted);
   font-style: italic;
 }
 
-/* Keywords — Rust orange (pub, fn, let, if, match, impl, trait, etc.) */
+/* Keywords + built-in types — cyan */
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-literal,
 .hljs-section,
-.hljs-link {
-  color: var(--accent-orange);
-}
-
-/* Built-in types and constants — Rust orange (Result, Option, Some, None, etc.) */
+.hljs-link,
 .hljs-built_in,
 .hljs-type,
 .hljs-class .hljs-title {
@@ -194,28 +261,27 @@ pre code { white-space: pre; }
   color: #93c5fd;
 }
 
-/* Function names — keep foreground (titles read as identifiers) */
+/* Function names / identifiers — neutral */
 .hljs-title,
 .hljs-name,
 .hljs-attr {
   color: var(--fg-primary);
 }
 
-/* Macros, attributes, decorators — Rust yellow (popn_top!, gas!, #[derive], etc.) */
+/* Macros, attributes, decorators — magenta */
 .hljs-meta,
 .hljs-meta .hljs-keyword,
 .hljs-template-tag,
 .hljs-template-variable {
-  color: #eab308;
+  color: var(--accent-magenta);
 }
 
-/* Variables — muted */
 .hljs-variable,
 .hljs-params {
   color: var(--fg-primary);
 }
 
-/* Tags / properties — orange */
+/* Tags / properties — cyan */
 .hljs-tag,
 .hljs-selector-id,
 .hljs-selector-class,
@@ -223,9 +289,8 @@ pre code { white-space: pre; }
   color: var(--accent-orange);
 }
 
-/* Subtle */
 .hljs-deletion {
-  color: var(--accent-red);
+  color: var(--accent-crit);
 }
 
 .hljs-emphasis { font-style: italic; }
