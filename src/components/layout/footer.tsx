@@ -14,10 +14,12 @@ export function Footer() {
         <span className="text-xs text-muted-foreground">
           {t('footer.builtBy')}
         </span>
-        <div className="flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="flex items-center gap-6 text-xs text-muted-foreground flex-wrap justify-center md:justify-end">
           <Link href="/courses" className="hover:text-foreground transition-colors">{t('nav.courses')}</Link>
           <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
           <Link href="/donate" className="hover:text-foreground transition-colors">Sponsor</Link>
+          <a href="https://fabrknt.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Sandboxes</a>
+          <a href="https://github.com/psyto/failsafe" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Failsafe</a>
           <a href="https://github.com/psyto/rethlab" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
           <a href="https://x.com/psyto" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">X</a>
           {!session && (
