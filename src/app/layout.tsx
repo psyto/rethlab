@@ -69,15 +69,16 @@ export const metadata: Metadata = {
     site: '@psyto',
     // images are auto-derived from app/opengraph-image.tsx
   },
+  // De-indexed: the courses are now canonical on fabrknt.com/dojo. RethLab is the
+  // same English content on a different host (duplicate content) and is being
+  // consolidated into Dojo. noindex (robots.txt still allows crawl so Google can
+  // re-crawl and honor this) until the JP lessons are migrated and RethLab retires.
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
     googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
+      index: false,
+      follow: false,
     },
   },
   icons: {
