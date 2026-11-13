@@ -98,6 +98,31 @@ const nextConfig = {
         destination: `/courses/reth-advanced-${locale}/lessons/reth-advanced-welcome-${locale}`,
         permanent: true,
       })),
+      // RethLab is retired into fabrknt.com/dojo (docs/2026-11-13-redirect-map-to-dojo.md).
+      // These come last so the slug moves above still apply first. Dojo keys every
+      // course by its -en slug; Japanese lives under /ja.
+      {
+        source: '/courses/:course([a-z0-9-]+)-ja/lessons/:lesson([a-z0-9-]+)-ja',
+        destination: 'https://fabrknt.com/ja/dojo/courses/:course-en/lessons/:lesson-en',
+        permanent: true,
+      },
+      {
+        source: '/courses/:course([a-z0-9-]+)-ja',
+        destination: 'https://fabrknt.com/ja/dojo/courses/:course-en',
+        permanent: true,
+      },
+      {
+        source: '/courses/:path*',
+        destination: 'https://fabrknt.com/dojo/courses/:path*',
+        permanent: true,
+      },
+      // Everything else (/, /about, /donate, sign-in, profile) → the Dojo home.
+      // robots.txt stays served so crawlers can still reach the redirects.
+      {
+        source: '/:path((?!robots\\.txt$).*)',
+        destination: 'https://fabrknt.com/dojo',
+        permanent: true,
+      },
     ];
   },
   images: {
